@@ -1,0 +1,87 @@
+version: "1"
+name: java-spring-boot
+variables:
+  app_name: my-spring-app
+  java_version: "21"
+  docker_registry: registry.example.com
+  docker_repo: "${docker_registry}/${app_name}"
+  deploy_env: staging
+triggers:
+  - type: git
+    events: [push, pull_request]
+    branches: [main, develop, "release/**"]
+    paths:
+      include: ["src/**", "pom.xml"]
+stages:
+  - name: build
+    steps:
+      - type: shell
+        name: maven-compile
+        run: ./mvnw clean compile -B -q
+        timeout: 5m
+  - name: test
+    depends_on: [build]
+    steps:
+      - type: shell
+        name: unit-tests
+        run: ./mvnw test -B
+        timeout: 10m
+      - type: shell
+        name: integration-tests
+        run: ./mvnw verify -P integration-tests -B
+        timeout: 15m
+  - name: code-quality
+    depends_on: [build]
+    steps:
+      - type: shell
+        name: checkstyle
+        run: ./mvnw checkstyle:check -B
+        timeout: 3m
+      - type: shell
+        name: spotbugs
+        run: ./mvnw spotbugs:check -B
+        timeout: 5m
+  - name: package
+    depends_on: [test, code-quality]
+    steps:
+      - type: shell
+        name: maven-package
+        run: ./mvnw package -DskipTests -B
+        timeout: 5m
+  - name: docker-build
+    depends_on: [package]
+    steps:
+      - type: docker
+        name: build-image
+        dockerfile: Dockerfile
+        image: "${docker_repo}"
+        tags: ["${GIMI_RUN_ID}", "latest"]
+        build_args:
+          JAR_FILE: "target/${app_name}.jar"
+          JAVA_VERSION: "${java_version}"
+  - name: deploy
+    depends_on: [docker-build]
+    environment: "${deploy_env}"
+    steps:
+      - type: shell
+        name: deploy-app
+        run: |
+          echo "Deploying ${docker_repo}:${GIMI_RUN_ID} to ${deploy_env}..."
+          echo "Waiting for health check..."
+        timeout: 10m
+  - name: smoke-test
+    depends_on: [deploy]
+    steps:
+      - type: shell
+        name: health-check
+        run: |
+          echo "Running smoke tests against ${deploy_env}..."
+          echo "Verifying /actuator/health endpoint..."
+        timeout: 3m
+  - name: notify
+    depends_on: [smoke-test]
+    run_on: always
+    steps:
+      - type: shell
+        name: send-notification
+        run: echo "Spring Boot pipeline finished for ${app_name} — environment: ${deploy_env}"

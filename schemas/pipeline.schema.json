@@ -1,0 +1,505 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gimi.dev/schemas/pipeline.schema.json",
+  "title": "Gimi Pipeline",
+  "description": "Schema for gimi CI/CD pipeline YAML definitions.",
+  "type": "object",
+  "required": ["version", "name", "stages"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "The pipeline specification version.",
+      "enum": ["1"]
+    },
+    "name": {
+      "type": "string",
+      "description": "The name of the pipeline.",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+    },
+    "variables": {
+      "type": "object",
+      "description": "Global variables available to all stages. Values support ${var} interpolation.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "description": "Secret references used by the pipeline.",
+      "additionalProperties": {
+        "$ref": "#/$defs/SecretRef"
+      }
+    },
+    "environments": {
+      "type": "object",
+      "description": "Named deployment environments.",
+      "additionalProperties": {
+        "$ref": "#/$defs/Environment"
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "description": "Triggers that start the pipeline.",
+      "items": {
+        "$ref": "#/$defs/Trigger"
+      }
+    },
+    "stages": {
+      "type": "array",
+      "description": "The ordered list of stages to execute.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/Stage"
+      }
+    }
+  },
+  "$defs": {
+    "SecretRef": {
+      "type": "object",
+      "description": "A reference to a secret value, specifying its source and path.",
+      "required": ["from", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "description": "The secret source type.",
+          "enum": ["env", "file"]
+        },
+        "path": {
+          "type": "string",
+          "description": "The path or name of the secret within the source."
+        }
+      }
+    },
+    "Environment": {
+      "type": "object",
+      "description": "A deployment environment with its configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "variables": {
+          "type": "object",
+          "description": "Environment-specific variables.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "requires_approval": {
+          "type": "boolean",
+          "description": "Whether deployments to this environment require manual approval.",
+          "default": false
+        },
+        "freeze_windows": {
+          "type": "array",
+          "description": "Freeze windows during which deployments are blocked.",
+          "items": {
+            "$ref": "#/$defs/FreezeWindow"
+          }
+        }
+      }
+    },
+    "FreezeWindow": {
+      "type": "object",
+      "description": "A deployment freeze window during which deployments are prohibited.",
+      "additionalProperties": false,
+      "properties": {
+        "cron": {
+          "type": "string",
+          "description": "Cron expression defining the recurrence of the freeze window."
+        },
+        "start": {
+          "type": "string",
+          "description": "The start time of the freeze window."
+        },
+        "end": {
+          "type": "string",
+          "description": "The end time of the freeze window."
+        }
+      }
+    },
+    "Trigger": {
+      "type": "object",
+      "description": "A trigger that starts the pipeline.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The trigger type discriminator.",
+          "enum": ["git", "cron", "webhook"]
+        }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/GitTrigger" },
+        { "$ref": "#/$defs/CronTrigger" },
+        { "$ref": "#/$defs/WebhookTrigger" }
+      ]
+    },
+    "GitTrigger": {
+      "type": "object",
+      "description": "A trigger that fires on Git events such as pushes, pull requests, or tags.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "git"
+        },
+        "events": {
+          "type": "array",
+          "description": "The Git events that activate this trigger.",
+          "items": {
+            "type": "string",
+            "enum": ["push", "pull_request", "tag"]
+          }
+        },
+        "branches": {
+          "type": "array",
+          "description": "Branch patterns to match. Supports glob patterns.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "paths": {
+          "$ref": "#/$defs/PathFilter"
+        }
+      }
+    },
+    "CronTrigger": {
+      "type": "object",
+      "description": "A trigger that fires on a cron schedule.",
+      "required": ["type", "schedule"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "cron"
+        },
+        "schedule": {
+          "type": "string",
+          "description": "The cron expression defining when the trigger fires."
+        },
+        "timezone": {
+          "type": "string",
+          "description": "The timezone for evaluating the cron expression.",
+          "default": "UTC"
+        }
+      }
+    },
+    "WebhookTrigger": {
+      "type": "object",
+      "description": "A trigger that fires when an external webhook is received.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "webhook"
+        },
+        "secret": {
+          "type": "string",
+          "description": "Shared secret used to validate incoming webhook requests."
+        }
+      }
+    },
+    "PathFilter": {
+      "type": "object",
+      "description": "Filters file paths by inclusion and exclusion patterns.",
+      "additionalProperties": false,
+      "properties": {
+        "include": {
+          "type": "array",
+          "description": "Path patterns to include.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "description": "Path patterns to exclude.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Stage": {
+      "type": "object",
+      "description": "A stage in a CI/CD pipeline.",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the stage.",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+        },
+        "depends_on": {
+          "type": "array",
+          "description": "Stage names this stage depends on.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parallel_with": {
+          "type": "string",
+          "description": "Name of another stage to run in parallel with."
+        },
+        "environment": {
+          "type": "string",
+          "description": "The target deployment environment for this stage."
+        },
+        "strategy": {
+          "$ref": "#/$defs/DeployStrategy"
+        },
+        "steps": {
+          "type": "array",
+          "description": "The steps to execute in this stage.",
+          "items": {
+            "$ref": "#/$defs/Step"
+          }
+        },
+        "stage_type": {
+          "type": "string",
+          "description": "The type of the stage.",
+          "enum": ["standard", "approval"],
+          "default": "standard"
+        },
+        "on_failure": {
+          "type": "string",
+          "description": "Action to take when the stage fails.",
+          "enum": ["abort", "retry", "skip"],
+          "default": "abort"
+        },
+        "run_on": {
+          "type": "string",
+          "description": "Condition under which the stage should run.",
+          "enum": ["on_success", "on_failure", "always"],
+          "default": "on_success"
+        },
+        "approvers": {
+          "$ref": "#/$defs/ApprovalConfig"
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Maximum duration for this stage (e.g. '30m', '1h').",
+          "pattern": "^[0-9]+(s|m|h)$"
+        }
+      }
+    },
+    "Step": {
+      "type": "object",
+      "description": "A step within a pipeline stage.",
+      "required": ["type", "name"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The step type discriminator.",
+          "enum": ["shell", "docker"]
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the step."
+        }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/ShellStep" },
+        { "$ref": "#/$defs/DockerStep" }
+      ]
+    },
+    "ShellStep": {
+      "type": "object",
+      "description": "A step that executes a shell command.",
+      "required": ["type", "name", "run"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "shell"
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of this step."
+        },
+        "run": {
+          "type": "string",
+          "description": "The shell command to execute."
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Maximum duration for this step (e.g. '5m', '1h').",
+          "pattern": "^[0-9]+(s|m|h)$"
+        },
+        "working_dir": {
+          "type": "string",
+          "description": "Working directory in which to run the command."
+        },
+        "env": {
+          "type": "object",
+          "description": "Additional environment variables for the command.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "DockerStep": {
+      "type": "object",
+      "description": "A step that builds or runs a Docker image.",
+      "required": ["type", "name", "image"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "docker"
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of this step."
+        },
+        "dockerfile": {
+          "type": "string",
+          "description": "Path to the Dockerfile.",
+          "default": "Dockerfile"
+        },
+        "image": {
+          "type": "string",
+          "description": "The Docker image name."
+        },
+        "tags": {
+          "type": "array",
+          "description": "Tags to apply to the image.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "build_args": {
+          "type": "object",
+          "description": "Build arguments to pass to the Docker build.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "DeployStrategy": {
+      "type": "object",
+      "description": "A deployment strategy for a pipeline stage.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "The strategy type discriminator.",
+          "enum": ["blue-green", "canary", "rolling"]
+        }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/BlueGreenStrategy" },
+        { "$ref": "#/$defs/CanaryStrategy" },
+        { "$ref": "#/$defs/RollingStrategy" }
+      ]
+    },
+    "BlueGreenStrategy": {
+      "type": "object",
+      "description": "Blue-green deployment strategy that swaps traffic between two identical environments.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "blue-green"
+        },
+        "swap_on_success": {
+          "type": "boolean",
+          "description": "Whether to swap the active environment upon successful deployment.",
+          "default": true
+        }
+      }
+    },
+    "CanaryStrategy": {
+      "type": "object",
+      "description": "Canary deployment strategy that gradually rolls out changes.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "canary"
+        },
+        "increments": {
+          "type": "array",
+          "description": "Percentage increments for canary rollout.",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "interval": {
+          "type": "string",
+          "description": "Time interval between each increment (e.g. '5m', '1h').",
+          "pattern": "^[0-9]+(s|m|h)$"
+        },
+        "validation": {
+          "$ref": "#/$defs/ShellStep",
+          "description": "Shell step used to validate each canary increment."
+        },
+        "rollback_on_failure": {
+          "type": "boolean",
+          "description": "Whether to automatically roll back on validation failure.",
+          "default": true
+        }
+      }
+    },
+    "RollingStrategy": {
+      "type": "object",
+      "description": "Rolling deployment strategy that updates instances incrementally.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "rolling"
+        },
+        "max_unavailable": {
+          "type": "integer",
+          "description": "Maximum number of instances that can be unavailable during the update.",
+          "minimum": 1,
+          "default": 1
+        }
+      }
+    },
+    "ApprovalConfig": {
+      "type": "object",
+      "description": "Configuration for stage approval.",
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "The approval request message."
+        },
+        "notify": {
+          "type": "array",
+          "description": "Notification channels to alert for approval.",
+          "items": {
+            "$ref": "#/$defs/NotifyChannel"
+          }
+        }
+      }
+    },
+    "NotifyChannel": {
+      "type": "object",
+      "description": "A notification channel for approval requests.",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "The name of the notification channel (e.g. 'slack', 'email', 'teams')."
+        },
+        "webhook": {
+          "type": "string",
+          "description": "The webhook URL for sending notifications.",
+          "format": "uri"
+        },
+        "message": {
+          "type": "string",
+          "description": "The notification message template."
+        }
+      }
+    }
+  }
+}

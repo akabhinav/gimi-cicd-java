@@ -1,0 +1,39 @@
+version: "1"
+name: sample-pipeline
+variables:
+  app_name: my-app
+  docker_registry: registry.example.com
+triggers:
+  - type: git
+    events: [push]
+    branches: [main]
+stages:
+  - name: build
+    steps:
+      - type: shell
+        name: compile
+        run: echo "Building ${app_name}..."
+        timeout: 5m
+      - type: shell
+        name: unit-tests
+        run: echo "Running unit tests..."
+        timeout: 10m
+  - name: lint
+    steps:
+      - type: shell
+        name: format-check
+        run: echo "Checking formatting..."
+  - name: deploy-staging
+    depends_on: [build, lint]
+    environment: staging
+    steps:
+      - type: shell
+        name: deploy
+        run: echo "Deploying ${app_name} to staging..."
+  - name: notify
+    depends_on: [deploy-staging]
+    run_on: always
+    steps:
+      - type: shell
+        name: send-notification
+        run: echo "Pipeline finished for ${app_name}"

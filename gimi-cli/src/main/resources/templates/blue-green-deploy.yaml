@@ -1,0 +1,105 @@
+version: "1"
+name: blue-green-deploy
+variables:
+  app_name: my-app
+  docker_registry: registry.example.com
+  docker_repo: "${docker_registry}/${app_name}"
+  image_tag: latest
+environments:
+  staging:
+    variables:
+      cluster: staging-cluster
+      namespace: staging
+    requires_approval: false
+  production:
+    variables:
+      cluster: prod-cluster
+      namespace: production
+    requires_approval: true
+    freeze_windows:
+      - cron: "0 0 * * 5-6"
+        start: "Friday 00:00"
+        end: "Sunday 23:59"
+triggers:
+  - type: git
+    events: [push]
+    branches: [main]
+stages:
+  - name: build
+    steps:
+      - type: shell
+        name: compile-and-test
+        run: |
+          echo "Building ${app_name}..."
+          echo "Running tests..."
+        timeout: 10m
+  - name: docker-build
+    depends_on: [build]
+    steps:
+      - type: docker
+        name: build-image
+        dockerfile: Dockerfile
+        image: "${docker_repo}"
+        tags: ["${image_tag}", "${GIMI_RUN_ID}"]
+  - name: deploy-staging
+    depends_on: [docker-build]
+    environment: staging
+    strategy:
+      type: blue-green
+      swap_on_success: true
+    steps:
+      - type: shell
+        name: deploy-to-green
+        run: |
+          echo "Deploying ${docker_repo}:${image_tag} to green slot in staging..."
+          echo "Running health checks on green slot..."
+        timeout: 10m
+      - type: shell
+        name: validate-green
+        run: |
+          echo "Validating green deployment..."
+          echo "Checking response codes and latency..."
+        timeout: 5m
+  - name: approval
+    depends_on: [deploy-staging]
+    stage_type: approval
+    approvers:
+      message: "Approve production deployment of ${app_name}:${image_tag}?"
+      notify:
+        - channel: slack
+          webhook: "${SLACK_WEBHOOK_URL}"
+          message: "Production deploy pending for ${app_name}"
+    steps: []
+  - name: deploy-production
+    depends_on: [approval]
+    environment: production
+    strategy:
+      type: blue-green
+      swap_on_success: true
+    steps:
+      - type: shell
+        name: deploy-to-green
+        run: |
+          echo "Deploying ${docker_repo}:${image_tag} to green slot in production..."
+          echo "Running health checks on green slot..."
+        timeout: 15m
+      - type: shell
+        name: swap-traffic
+        run: echo "Swapping traffic from blue to green..."
+        timeout: 5m
+  - name: verify
+    depends_on: [deploy-production]
+    steps:
+      - type: shell
+        name: post-deploy-check
+        run: |
+          echo "Running post-deployment verification..."
+          echo "Monitoring error rates for 5 minutes..."
+        timeout: 10m
+  - name: notify
+    depends_on: [verify]
+    run_on: always
+    steps:
+      - type: shell
+        name: send-notification
+        run: echo "Blue-green deployment pipeline finished for ${app_name}"

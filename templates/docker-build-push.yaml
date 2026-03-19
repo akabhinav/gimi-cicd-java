@@ -1,0 +1,56 @@
+version: "1"
+name: docker-build-push
+variables:
+  app_name: my-app
+  docker_registry: registry.example.com
+  docker_repo: "${docker_registry}/${app_name}"
+  image_tag: latest
+triggers:
+  - type: git
+    events: [push]
+    branches: [main]
+    paths:
+      include: ["src/**", "Dockerfile"]
+stages:
+  - name: test
+    steps:
+      - type: shell
+        name: unit-tests
+        run: echo "Running unit tests..."
+        timeout: 10m
+      - type: shell
+        name: integration-tests
+        run: echo "Running integration tests..."
+        timeout: 15m
+  - name: build-image
+    depends_on: [test]
+    steps:
+      - type: docker
+        name: build
+        dockerfile: Dockerfile
+        image: "${docker_repo}"
+        tags: ["${image_tag}", "${GIMI_RUN_ID}"]
+        build_args:
+          APP_VERSION: "${image_tag}"
+  - name: scan
+    depends_on: [build-image]
+    steps:
+      - type: shell
+        name: vulnerability-scan
+        run: echo "Scanning ${docker_repo}:${image_tag} for vulnerabilities..."
+        timeout: 5m
+  - name: push
+    depends_on: [scan]
+    steps:
+      - type: shell
+        name: docker-push
+        run: |
+          echo "Pushing ${docker_repo}:${image_tag}..."
+          echo "Pushing ${docker_repo}:${GIMI_RUN_ID}..."
+  - name: notify
+    depends_on: [push]
+    run_on: always
+    steps:
+      - type: shell
+        name: send-notification
+        run: echo "Docker build pipeline finished for ${docker_repo}:${image_tag}"

@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  native-build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: gimi-linux-x86_64
+          - os: macos-latest
+            artifact: gimi-macos-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build native image
+        run: mvn clean package -Pnative -pl gimi-cli -am -B -DskipTests
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: gimi-cli/target/gimi
+
+  release:
+    needs: native-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            gimi-linux-x86_64/gimi
+            gimi-macos-arm64/gimi
+          generate_release_notes: true

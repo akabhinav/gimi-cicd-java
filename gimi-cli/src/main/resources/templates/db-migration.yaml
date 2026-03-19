@@ -1,0 +1,102 @@
+version: "1"
+name: db-migration
+variables:
+  app_name: my-app
+  db_host: db.example.com
+  db_name: app_database
+  migration_tool: flyway
+  backup_dir: /backups
+secrets:
+  db_password:
+    from: env
+    path: DB_PASSWORD
+  db_user:
+    from: env
+    path: DB_USERNAME
+environments:
+  staging:
+    variables:
+      db_host: staging-db.example.com
+      db_name: app_database_staging
+    requires_approval: false
+  production:
+    variables:
+      db_host: prod-db.example.com
+      db_name: app_database_prod
+    requires_approval: true
+triggers:
+  - type: git
+    events: [push]
+    branches: [main]
+    paths:
+      include: ["db/migrations/**", "sql/**"]
+stages:
+  - name: validate
+    steps:
+      - type: shell
+        name: lint-sql
+        run: echo "Linting SQL migration files..."
+        timeout: 3m
+      - type: shell
+        name: dry-run
+        run: |
+          echo "Running ${migration_tool} dry-run against ${db_name}..."
+          echo "Validating migration checksums..."
+        timeout: 5m
+  - name: backup
+    depends_on: [validate]
+    steps:
+      - type: shell
+        name: create-backup
+        run: |
+          echo "Creating backup of ${db_name} on ${db_host}..."
+          echo "Backup saved to ${backup_dir}/${db_name}-${GIMI_RUN_ID}.sql.gz"
+        timeout: 30m
+      - type: shell
+        name: verify-backup
+        run: |
+          echo "Verifying backup integrity..."
+          echo "Backup checksum validated."
+        timeout: 5m
+  - name: migrate
+    depends_on: [backup]
+    steps:
+      - type: shell
+        name: run-migration
+        run: |
+          echo "Applying ${migration_tool} migrations to ${db_name} on ${db_host}..."
+          echo "Migration completed."
+        timeout: 30m
+  - name: verify
+    depends_on: [migrate]
+    steps:
+      - type: shell
+        name: schema-check
+        run: |
+          echo "Verifying schema version..."
+          echo "Running data integrity checks..."
+        timeout: 5m
+      - type: shell
+        name: app-health-check
+        run: |
+          echo "Checking application connectivity to migrated database..."
+          echo "Health check passed."
+        timeout: 3m
+  - name: rollback-plan
+    depends_on: [migrate]
+    run_on: on_failure
+    steps:
+      - type: shell
+        name: restore-backup
+        run: |
+          echo "Migration failed — restoring from backup..."
+          echo "Restoring ${backup_dir}/${db_name}-${GIMI_RUN_ID}.sql.gz..."
+          echo "Database restored to pre-migration state."
+        timeout: 30m
+  - name: notify
+    depends_on: [verify, rollback-plan]
+    run_on: always
+    steps:
+      - type: shell
+        name: send-notification
+        run: echo "Database migration pipeline finished for ${db_name}"

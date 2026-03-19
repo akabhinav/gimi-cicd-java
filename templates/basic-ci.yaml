@@ -1,0 +1,29 @@
+version: "1"
+name: basic-ci
+variables:
+  app_name: my-app
+triggers:
+  - type: git
+    events: [push, pull_request]
+    branches: [main, develop]
+stages:
+  - name: build
+    steps:
+      - type: shell
+        name: compile
+        run: echo "Compiling ${app_name}..."
+      - type: shell
+        name: test
+        run: echo "Running tests..."
+  - name: lint
+    steps:
+      - type: shell
+        name: check-style
+        run: echo "Running linter..."
+  - name: report
+    depends_on: [build, lint]
+    run_on: always
+    steps:
+      - type: shell
+        name: summary
+        run: echo "Build complete for ${app_name}"
