@@ -12,8 +12,8 @@ import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.StreamType;
 import com.github.dockerjava.api.model.Volume;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
-import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.core.DockerClientConfig;
+import com.github.dockerjava.core.DockerClientImpl;
 import dev.gimi.core.execution.ExecutionStatus;
 import dev.gimi.core.execution.StepResult;
 import dev.gimi.core.model.DockerStep;
@@ -60,7 +60,7 @@ public final class DockerExecutor implements StepExecutor {
      */
     public DockerExecutor(long timeoutSeconds) {
         DockerClientConfig config = DefaultDockerClientConfig.createDefaultConfigBuilder().build();
-        this.dockerClient = DockerClientBuilder.getInstance(config).build();
+        this.dockerClient = DockerClientImpl.getInstance(config);
         this.timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : DEFAULT_TIMEOUT_SECONDS;
     }
 

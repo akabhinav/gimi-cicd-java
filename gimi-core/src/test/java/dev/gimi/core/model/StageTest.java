@@ -103,12 +103,12 @@ class StageTest {
     @Test
     void shouldPreserveParallelWithAndEnvironment() {
         Stage stage = new Stage("deploy", null, "build", "production",
-                null, null, StageType.DEPLOY, null, null, null, "30m");
+                null, null, StageType.STANDARD, null, null, null, "30m");
 
         assertThat(stage.parallelWith()).isEqualTo("build");
         assertThat(stage.environment()).isEqualTo("production");
         assertThat(stage.timeout()).isEqualTo("30m");
-        assertThat(stage.stageType()).isEqualTo(StageType.DEPLOY);
+        assertThat(stage.stageType()).isEqualTo(StageType.STANDARD);
     }
 
     @Test

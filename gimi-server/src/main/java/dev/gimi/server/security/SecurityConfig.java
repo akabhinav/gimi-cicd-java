@@ -51,9 +51,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/approvals/**").hasAnyRole("ADMIN", "OPERATOR")
 
                         // Developer+ endpoints (ADMIN, OPERATOR, or DEVELOPER)
+                        .requestMatchers(HttpMethod.GET, "/api/pipelines/**").hasAnyRole("ADMIN", "OPERATOR", "DEVELOPER")
                         .requestMatchers(HttpMethod.POST, "/api/pipelines/**").hasAnyRole("ADMIN", "OPERATOR", "DEVELOPER")
                         .requestMatchers(HttpMethod.GET, "/api/runs/**").hasAnyRole("ADMIN", "OPERATOR", "DEVELOPER")
                         .requestMatchers(HttpMethod.GET, "/api/logs/**").hasAnyRole("ADMIN", "OPERATOR", "DEVELOPER")
+                        .requestMatchers(HttpMethod.GET, "/api/artifacts/**").hasAnyRole("ADMIN", "OPERATOR", "DEVELOPER")
+                        .requestMatchers(HttpMethod.GET, "/api/approvals/**").hasAnyRole("ADMIN", "OPERATOR", "DEVELOPER")
+                        .requestMatchers(HttpMethod.GET, "/api/workers/**").hasAnyRole("ADMIN", "OPERATOR")
 
                         // Everything else requires authentication
                         .anyRequest().authenticated()
