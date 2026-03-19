@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+gimi:
+  server:
+    pipeline-dir: ./pipelines
+    webhook-secret: ""
+    jwt-secret: change-me-in-production-min-32-chars!!
+    default-admin-password: admin
+    distributed-mode: false
+    redis-url: redis://localhost:6379
+    postgres-url: jdbc:postgresql://localhost:5432/gimi
+    postgres-username: gimi
+    postgres-password: gimi
+    s3-bucket: gimi-artifacts
+    s3-region: us-east-1
+    s3-endpoint: ""
+
+spring:
+  application:
+    name: gimi-server
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: gimi-server
+
+logging:
+  level:
+    dev.gimi: INFO
+    org.springframework.security: WARN

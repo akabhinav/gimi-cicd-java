@@ -1,0 +1,25 @@
+server:
+  port: 8081
+
+gimi:
+  worker:
+    max-concurrent-jobs: 4
+    poll-interval-ms: 1000
+    heartbeat-interval-ms: 5000
+    redis-url: redis://localhost:6379
+    server-url: http://localhost:8080
+    labels:
+      - default
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info,metrics
+  metrics:
+    tags:
+      application: gimi-worker
+
+logging:
+  level:
+    dev.gimi: INFO

@@ -89,4 +89,47 @@ class PipelineTest {
         assertThat(p1).isEqualTo(p2);
         assertThat(p1.hashCode()).isEqualTo(p2.hashCode());
     }
+
+    @Test
+    void shouldCreateDefensiveCopyOfSecrets() {
+        Map<String, SecretRef> secrets = new HashMap<>();
+        secrets.put("key", new SecretRef("env", "PATH"));
+
+        Pipeline pipeline = new Pipeline("1", "test", null, secrets, null, null, null);
+        secrets.put("extra", new SecretRef("file", "/tmp/x"));
+
+        assertThat(pipeline.secrets()).hasSize(1);
+    }
+
+    @Test
+    void shouldCreateDefensiveCopyOfEnvironments() {
+        Map<String, Environment> envs = new HashMap<>();
+        envs.put("prod", new Environment(Map.of("URL", "https://prod"), true, null));
+
+        Pipeline pipeline = new Pipeline("1", "test", null, null, envs, null, null);
+        envs.put("staging", new Environment(null, false, null));
+
+        assertThat(pipeline.environments()).hasSize(1);
+        assertThat(pipeline.environments()).containsKey("prod");
+    }
+
+    @Test
+    void shouldCreatePipelineWithAllFields() {
+        ShellStep step = new ShellStep("build", "mvn package", null, null, null);
+        Stage stage = new Stage("build", null, null, null, null,
+                List.of(step), null, null, null, null, null);
+        GitTrigger trigger = new GitTrigger(List.of(GitEvent.PUSH), List.of("main"), null);
+        Environment env = new Environment(Map.of("URL", "https://prod"), true, null);
+
+        Pipeline pipeline = new Pipeline("1", "full-pipeline",
+                Map.of("env", "prod"),
+                Map.of("secret", new SecretRef("env", "MY_SECRET")),
+                Map.of("production", env),
+                List.of(trigger),
+                List.of(stage));
+
+        assertThat(pipeline.stages()).hasSize(1);
+        assertThat(pipeline.triggers()).hasSize(1);
+        assertThat(pipeline.environments()).hasSize(1);
+    }
 }
