@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
 
     <name>gimi-cicd</name>
-    <description>CLI-first CI/CD pipeline engine — Java 21 + Spring Boot 3</description>
+    <description>Production-grade distributed CI/CD pipeline engine — Java 21 + Spring Boot 3</description>
     <url>https://github.com/gimi-org/gimi-cicd</url>
 
     <licenses>
@@ -25,6 +25,7 @@
         <module>gimi-engine</module>
         <module>gimi-cli</module>
         <module>gimi-server</module>
+        <module>gimi-worker</module>
     </modules>
 
     <properties>
@@ -43,12 +44,32 @@
         <jansi.version>2.4.1</jansi.version>
         <slf4j.version>2.0.16</slf4j.version>
 
-        <!-- Spring Boot (for gimi-server only) -->
+        <!-- Spring Boot (for gimi-server and gimi-worker) -->
         <spring-boot.version>3.4.1</spring-boot.version>
+
+        <!-- Database -->
+        <postgresql.version>42.7.4</postgresql.version>
+        <hikari.version>6.2.1</hikari.version>
+        <flyway.version>10.22.0</flyway.version>
+
+        <!-- Redis -->
+        <jedis.version>5.2.0</jedis.version>
+
+        <!-- Security -->
+        <jjwt.version>0.12.6</jjwt.version>
+        <bcrypt.version>0.10.2</bcrypt.version>
+
+        <!-- AWS S3 -->
+        <aws-sdk.version>2.29.46</aws-sdk.version>
+
+        <!-- Observability -->
+        <micrometer.version>1.14.2</micrometer.version>
 
         <!-- Testing -->
         <junit.version>5.11.4</junit.version>
         <assertj.version>3.27.3</assertj.version>
+        <mockito.version>5.14.2</mockito.version>
+        <testcontainers.version>1.20.4</testcontainers.version>
 
         <!-- Build -->
         <native-maven-plugin.version>0.10.4</native-maven-plugin.version>
@@ -104,16 +125,13 @@
                 <version>3.1.0</version>
             </dependency>
 
-            <!-- Spring Boot -->
+            <!-- Spring Boot BOM -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-web</artifactId>
+                <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-test</artifactId>
-                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
 
             <!-- CLI -->
@@ -147,11 +165,67 @@
                 <version>${docker-java.version}</version>
             </dependency>
 
-            <!-- SQLite -->
+            <!-- Database -->
             <dependency>
                 <groupId>org.xerial</groupId>
                 <artifactId>sqlite-jdbc</artifactId>
                 <version>${sqlite-jdbc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>${postgresql.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.zaxxer</groupId>
+                <artifactId>HikariCP</artifactId>
+                <version>${hikari.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-core</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-database-postgresql</artifactId>
+                <version>${flyway.version}</version>
+            </dependency>
+
+            <!-- Redis -->
+            <dependency>
+                <groupId>redis.clients</groupId>
+                <artifactId>jedis</artifactId>
+                <version>${jedis.version}</version>
+            </dependency>
+
+            <!-- Security -->
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>at.favre.lib</groupId>
+                <artifactId>bcrypt</artifactId>
+                <version>${bcrypt.version}</version>
+            </dependency>
+
+            <!-- AWS S3 -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>s3</artifactId>
+                <version>${aws-sdk.version}</version>
             </dependency>
 
             <!-- Cron -->
@@ -190,6 +264,23 @@
                 <groupId>org.assertj</groupId>
                 <artifactId>assertj-core</artifactId>
                 <version>${assertj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-core</artifactId>
+                <version>${mockito.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-junit-jupiter</artifactId>
+                <version>${mockito.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
