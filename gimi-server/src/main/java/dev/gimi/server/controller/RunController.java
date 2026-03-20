@@ -125,7 +125,7 @@ public class RunController {
     @GetMapping
     public ResponseEntity<List<ExecutionRecord>> listRuns(
             @RequestParam(defaultValue = "20") int limit) {
-        List<ExecutionRecord> runs = executionStore.getRecent(Math.min(limit, 100));
+        List<ExecutionRecord> runs = executionStore.getRecent(Math.max(1, Math.min(limit, 100)));
         return ResponseEntity.ok(runs);
     }
 

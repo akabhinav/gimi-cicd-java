@@ -45,6 +45,8 @@ public class LogController {
             @RequestParam(defaultValue = "100") int limit,
             @RequestParam(defaultValue = "0") int offset) {
 
+        limit = Math.max(1, Math.min(limit, 1000));
+        offset = Math.max(0, offset);
         String countSql = "SELECT COUNT(*) FROM logs WHERE run_id = ?";
         String sql = "SELECT run_id, stage_name, step_name, level, message, timestamp, worker_id " +
                      "FROM logs WHERE run_id = ? ORDER BY timestamp ASC LIMIT ? OFFSET ?";
