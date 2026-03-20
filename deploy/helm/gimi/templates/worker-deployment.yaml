@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gimi.fullname" . }}-worker
+  labels:
+    {{- include "gimi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "gimi.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        {{- include "gimi.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "gimi.fullname" . }}-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: {{ include "gimi.workerImage" . }}
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.worker.javaOpts | quote }}
+            - name: GIMI_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gimi.secretName" . }}
+                  key: redis-url
+            - name: GIMI_SERVER_URL
+              value: "http://{{ include "gimi.fullname" . }}-server:{{ .Values.server.port }}"
+            - name: GIMI_WORKER_MAX_CONCURRENT
+              value: {{ .Values.worker.maxConcurrentJobs | quote }}
+            - name: GIMI_WORKER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gimi.secretName" . }}
+                  key: worker-token
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 20
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "gimi.fullname" . }}-worker
+  labels:
+    {{- include "gimi.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "gimi.fullname" . }}-worker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "gimi.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+{{- if .Values.worker.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "gimi.fullname" . }}-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "gimi.fullname" . }}-worker
+  minReplicas: {{ .Values.worker.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.worker.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.worker.autoscaling.targetCPU }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.worker.autoscaling.targetMemory }}
+{{- end }}

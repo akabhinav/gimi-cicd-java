@@ -1,0 +1,14 @@
+apiVersion: v2
+name: gimi
+description: GIMI CI/CD — Production-grade distributed pipeline engine
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ci-cd
+  - pipeline
+  - devops
+  - kubernetes
+home: https://github.com/gimi-org/gimi-cicd
+maintainers:
+  - name: GIMI Team
