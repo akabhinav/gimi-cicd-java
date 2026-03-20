@@ -8,6 +8,7 @@ stages:
   - name: install
     steps:
       - name: npm-install
+        type: docker
         image: node:20
         commands:
           - npm ci
@@ -15,10 +16,12 @@ stages:
     depends_on: [install]
     steps:
       - name: lint
+        type: docker
         image: node:20
         commands:
           - npm run lint
       - name: unit-test
+        type: docker
         image: node:20
         commands:
           - npm test
@@ -26,6 +29,7 @@ stages:
     depends_on: [test]
     steps:
       - name: build
+        type: docker
         image: node:20
         commands:
           - npm run build
@@ -33,6 +37,7 @@ stages:
     depends_on: [build]
     steps:
       - name: upload-cdn
+        type: docker
         image: amazon/aws-cli
         commands:
           - aws s3 sync dist/ s3://cdn-bucket/

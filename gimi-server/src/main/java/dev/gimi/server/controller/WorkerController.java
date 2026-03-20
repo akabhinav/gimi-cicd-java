@@ -1,5 +1,6 @@
 package dev.gimi.server.controller;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import dev.gimi.core.model.WorkerNode;
 import dev.gimi.core.model.WorkerStatus;
 import jakarta.validation.Valid;
@@ -201,6 +202,7 @@ public class WorkerController {
         return ResponseEntity.ok(Map.of("id", id, "status", "DEREGISTERED"));
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record RegisterWorkerRequest(
             String id,
             @NotBlank String hostname,

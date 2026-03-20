@@ -8,10 +8,12 @@ stages:
   - name: build
     steps:
       - name: compile
+        type: docker
         image: maven:3.9
         commands:
           - mvn compile
       - name: unit-test
+        type: docker
         image: maven:3.9
         commands:
           - mvn test
@@ -19,6 +21,7 @@ stages:
     depends_on: [build]
     steps:
       - name: sonar-scan
+        type: docker
         image: sonarsource/sonar-scanner
         commands:
           - sonar-scanner
@@ -26,20 +29,20 @@ stages:
     depends_on: [build]
     steps:
       - name: build-image
+        type: docker
         image: docker:24
         commands:
           - docker build -t app:latest .
       - name: push-image
+        type: docker
         image: docker:24
         commands:
           - docker push registry/app:latest
   - name: deploy-staging
     depends_on: [security-scan, docker-build]
-    strategy:
-      type: canary
-      increments: [10, 50, 100]
     steps:
       - name: deploy
+        type: docker
         image: bitnami/kubectl
         commands:
           - kubectl apply -f k8s/staging/

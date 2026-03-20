@@ -50,6 +50,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers("/webhook").permitAll()
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/workers/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/workers/*/heartbeat").permitAll()
 
                         // Admin-only endpoints
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
