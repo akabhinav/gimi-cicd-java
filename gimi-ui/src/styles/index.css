@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #0078d4;
+  --color-primary-600: #0066b8;
+  --color-primary-700: #005499;
+  --color-primary-800: #003d75;
+  --color-primary-900: #002952;
+
+  --color-bg-primary: #0e1116;
+  --color-bg-secondary: #161b22;
+  --color-bg-tertiary: #1c2128;
+  --color-bg-card: #1c2128;
+  --color-bg-hover: #252b33;
+  --color-bg-active: #2d333b;
+
+  --color-border-primary: #2d333b;
+  --color-border-secondary: #373e47;
+
+  --color-text-primary: #e6edf3;
+  --color-text-secondary: #8b949e;
+  --color-text-tertiary: #6e7681;
+
+  --color-success: #2ea043;
+  --color-success-light: #1a7f37;
+  --color-warning: #d29922;
+  --color-danger: #f85149;
+  --color-info: #58a6ff;
+
+  --color-status-success: #2ea043;
+  --color-status-running: #1f6feb;
+  --color-status-failed: #f85149;
+  --color-status-pending: #8b949e;
+  --color-status-queued: #d29922;
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+.react-flow__node {
+  font-family: var(--font-sans);
+}
+
+.log-line:hover {
+  background-color: var(--color-bg-hover);
+}
