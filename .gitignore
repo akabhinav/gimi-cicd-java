@@ -25,3 +25,4 @@ Thumbs.db
 # Native image
 *.o
 *.d
+dump.rdb
