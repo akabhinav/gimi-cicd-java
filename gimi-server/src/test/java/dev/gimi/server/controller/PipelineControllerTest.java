@@ -8,6 +8,8 @@ import dev.gimi.engine.validator.ValidationError;
 import dev.gimi.server.config.ServerConfig;
 import dev.gimi.server.security.JwtAuthFilter;
 import dev.gimi.server.security.JwtTokenProvider;
+import dev.gimi.server.security.RateLimitFilter;
+import dev.gimi.server.security.WorkerAuthFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -44,6 +46,12 @@ class PipelineControllerTest {
 
     @MockBean
     private JwtAuthFilter jwtAuthFilter;
+
+    @MockBean
+    private RateLimitFilter rateLimitFilter;
+
+    @MockBean
+    private WorkerAuthFilter workerAuthFilter;
 
     @Test
     @WithMockUser(roles = "ADMIN")

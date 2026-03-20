@@ -28,7 +28,8 @@ COPY --from=build /build/gimi-server/target/*.jar app.jar
 COPY pipelines/ pipelines/
 USER gimi
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV JAVA_OPTS="-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport -Djava.security.egd=file:/dev/./urandom"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 
 # --- Worker runtime ---
 FROM eclipse-temurin:21-jre-alpine AS worker
@@ -37,4 +38,5 @@ WORKDIR /app
 COPY --from=build /build/gimi-worker/target/*.jar app.jar
 USER gimi
 EXPOSE 8081
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV JAVA_OPTS="-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport -Djava.security.egd=file:/dev/./urandom"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

@@ -59,7 +59,8 @@ public final class ShellExecutor implements StepExecutor {
         ShellStep shell = (ShellStep) step;
         String resolvedCommand = interpolator.interpolate(shell.run());
 
-        LOG.info("Executing step '{}': {}", shell.name(), resolvedCommand);
+        // Log the command template (not the resolved command which may contain secrets)
+        LOG.info("Executing step '{}': {}", shell.name(), shell.run());
 
         ProcessBuilder pb = new ProcessBuilder("sh", "-c", resolvedCommand);
         pb.redirectErrorStream(true);

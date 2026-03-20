@@ -61,19 +61,23 @@ public class WebhookController {
             @RequestHeader(value = "X-Hub-Signature-256", required = false) String githubSignature,
             @RequestBody String rawBody) {
 
-        // Validate webhook secret
+        // Validate webhook secret — always required when configured
         String webhookSecret = serverConfig.getWebhookSecret();
         if (webhookSecret != null && !webhookSecret.isBlank()) {
             // Try GitHub signature verification first
             if (githubSignature != null && !githubSignature.isBlank()) {
                 if (!verifyGitHubSignature(rawBody, githubSignature, webhookSecret)) {
+                    log.warn("Webhook rejected: invalid GitHub signature from {}", extractClientIp(null));
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                             .body(Map.of("error", "Invalid GitHub webhook signature"));
                 }
-            } else if (secret == null || !secret.equals(webhookSecret)) {
+            } else if (secret == null || !constantTimeEquals(secret, webhookSecret)) {
+                log.warn("Webhook rejected: invalid or missing secret");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(Map.of("error", "Invalid or missing webhook secret"));
             }
+        } else {
+            log.warn("Webhook secret not configured — accepting unsigned payload. Configure GIMI_SERVER_WEBHOOK_SECRET for production.");
         }
 
         // Parse the JSON payload
@@ -261,6 +265,26 @@ public class WebhookController {
             case "tag" -> GitEvent.TAG;
             default -> null;
         };
+    }
+
+    /**
+     * Constant-time string comparison to prevent timing attacks.
+     */
+    private boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) return false;
+        byte[] aBytes = a.getBytes(StandardCharsets.UTF_8);
+        byte[] bBytes = b.getBytes(StandardCharsets.UTF_8);
+        if (aBytes.length != bBytes.length) return false;
+        int result = 0;
+        for (int i = 0; i < aBytes.length; i++) {
+            result |= aBytes[i] ^ bBytes[i];
+        }
+        return result == 0;
+    }
+
+    private String extractClientIp(jakarta.servlet.http.HttpServletRequest request) {
+        // Placeholder — actual request is not directly available in this context
+        return "unknown";
     }
 
     private boolean matchesGlob(String value, String pattern) {

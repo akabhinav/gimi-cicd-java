@@ -22,6 +22,7 @@ gimi:
     s3-bucket: gimi-artifacts
     s3-region: us-east-1
     s3-endpoint: ""
+    cors-allowed-origins: ""  # Comma-separated list. Empty = localhost only (dev mode)
 
 spring:
   application:
@@ -42,6 +43,13 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,redis,postgres
   metrics:
     tags:
       application: gimi-server

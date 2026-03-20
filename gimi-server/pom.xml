@@ -64,6 +64,7 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+
         <!-- Redis for sessions/cache -->
         <dependency>
             <groupId>redis.clients</groupId>

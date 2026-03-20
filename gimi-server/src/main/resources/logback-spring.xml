@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProfile name="!prod">
+        <!-- Development: human-readable console output with correlation ID -->
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod">
+        <!-- Production: structured JSON-like logging for log aggregation -->
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>{"timestamp":"%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX}","level":"%level","logger":"%logger{36}","correlationId":"%X{correlationId:-}","thread":"%thread","message":"%replace(%msg){'\"','\\\"'}"}%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="JSON"/>
+        </root>
+    </springProfile>
+
+    <!-- Common log levels -->
+    <logger name="dev.gimi" level="INFO"/>
+    <logger name="org.springframework.security" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+    <logger name="org.flywaydb" level="INFO"/>
+</configuration>

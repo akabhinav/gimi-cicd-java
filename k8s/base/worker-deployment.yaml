@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gimi-worker
+  namespace: gimi
+  labels:
+    app: gimi-worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: gimi-worker
+  template:
+    metadata:
+      labels:
+        app: gimi-worker
+    spec:
+      serviceAccountName: gimi-worker
+      containers:
+        - name: worker
+          image: gimi/worker:latest
+          ports:
+            - containerPort: 8081
+              name: http
+          env:
+            - name: GIMI_WORKER_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: redis-url
+            - name: GIMI_WORKER_SERVER_URL
+              value: http://gimi-server:8080
+            - name: GIMI_WORKER_MAX_CONCURRENT_JOBS
+              value: "200"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      terminationGracePeriodSeconds: 90
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gimi-worker
+  namespace: gimi
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gimi-worker
+  minReplicas: 2
+  maxReplicas: 50
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gimi-worker
+  namespace: gimi

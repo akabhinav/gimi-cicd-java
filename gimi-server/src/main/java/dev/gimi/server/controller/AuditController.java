@@ -35,9 +35,28 @@ public class AuditController {
 
         ResourceScope scope = accountId != null ?
             ResourceScope.project(accountId, organizationId, projectId) : null;
-        AuditCategory cat = category != null ? AuditCategory.valueOf(category.toUpperCase()) : null;
-        Instant fromTs = from != null ? Instant.parse(from) : null;
-        Instant toTs = to != null ? Instant.parse(to) : null;
+
+        AuditCategory cat = null;
+        if (category != null) {
+            try {
+                cat = AuditCategory.valueOf(category.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(List.of());
+            }
+        }
+
+        Instant fromTs = null;
+        Instant toTs = null;
+        try {
+            fromTs = from != null ? Instant.parse(from) : null;
+            toTs = to != null ? Instant.parse(to) : null;
+        } catch (java.time.format.DateTimeParseException e) {
+            return ResponseEntity.badRequest().body(List.of());
+        }
+
+        if (limit < 0) limit = 50;
+        if (limit > 1000) limit = 1000;
+        if (offset < 0) offset = 0;
 
         var query = new AuditService.AuditQuery(scope, userId, resourceType, resourceId, cat, fromTs, toTs, limit, offset);
         return ResponseEntity.ok(auditService.query(query));

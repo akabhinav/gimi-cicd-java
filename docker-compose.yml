@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: gimi
       POSTGRES_USER: gimi
-      POSTGRES_PASSWORD: gimi
+      POSTGRES_PASSWORD: ${GIMI_POSTGRES_PASSWORD:-gimi}
     ports:
       - "5432:5432"
     volumes:
@@ -38,13 +38,23 @@ services:
     ports:
       - "8080:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: dev
       GIMI_SERVER_DISTRIBUTED_MODE: "true"
       GIMI_SERVER_POSTGRES_URL: jdbc:postgresql://postgres:5432/gimi
       GIMI_SERVER_POSTGRES_USERNAME: gimi
-      GIMI_SERVER_POSTGRES_PASSWORD: gimi
+      GIMI_SERVER_POSTGRES_PASSWORD: ${GIMI_POSTGRES_PASSWORD:-gimi}
       GIMI_SERVER_REDIS_URL: redis://redis:6379
       GIMI_SERVER_PIPELINE_DIR: /app/pipelines
-      GIMI_SERVER_JWT_SECRET: change-me-in-production-min-32-chars!!
+      GIMI_SERVER_JWT_SECRET: ${GIMI_JWT_SECRET:-change-me-in-production-min-32-chars!!}
+      GIMI_SERVER_WEBHOOK_SECRET: ${GIMI_WEBHOOK_SECRET:-}
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     volumes:
       - ./pipelines:/app/pipelines
     depends_on:
@@ -68,6 +78,14 @@ services:
       GIMI_WORKER_REDIS_URL: redis://redis:6379
       GIMI_WORKER_SERVER_URL: http://gimi-server:8080
       GIMI_WORKER_MAX_CONCURRENT_JOBS: "200"
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
     depends_on:
       gimi-server:
         condition: service_healthy

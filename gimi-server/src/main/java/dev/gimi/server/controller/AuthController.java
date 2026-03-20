@@ -84,7 +84,7 @@ public class AuthController {
      * Register a new user. Only ADMIN can create users, except for the first user.
      */
     @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> register(@Valid @RequestBody RegisterRequest request) {
+    public synchronized ResponseEntity<Map<String, Object>> register(@Valid @RequestBody RegisterRequest request) {
         boolean hasUsers = countUsers() > 0;
 
         if (hasUsers) {
@@ -99,6 +99,12 @@ public class AuthController {
         if (loadUserByUsername(request.username()) != null) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "Username already exists"));
+        }
+
+        // Double-check after synchronization to prevent race condition on first user
+        if (!hasUsers && countUsers() > 0) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Initial admin user already created. Contact an administrator."));
         }
 
         String id = UUID.randomUUID().toString();

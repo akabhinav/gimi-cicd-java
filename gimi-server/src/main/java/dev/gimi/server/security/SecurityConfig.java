@@ -3,6 +3,8 @@ package dev.gimi.server.security;
 import java.util.Arrays;
 import java.util.List;
 
+import dev.gimi.server.config.ServerConfig;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -31,9 +33,18 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RateLimitFilter rateLimitFilter;
+    private final WorkerAuthFilter workerAuthFilter;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+    @Value("${gimi.server.cors-allowed-origins:}")
+    private String corsAllowedOrigins;
+
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter,
+                          RateLimitFilter rateLimitFilter,
+                          WorkerAuthFilter workerAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.rateLimitFilter = rateLimitFilter;
+        this.workerAuthFilter = workerAuthFilter;
     }
 
     @Bean
@@ -47,9 +58,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/register").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/actuator/prometheus").permitAll()
+                        .requestMatchers("/actuator/health/liveness").permitAll()
+                        .requestMatchers("/actuator/health/readiness").permitAll()
+                        .requestMatchers("/actuator/prometheus").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers("/webhook").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Worker endpoints require worker token (validated by WorkerAuthFilter)
                         .requestMatchers(HttpMethod.POST, "/api/workers/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/workers/*/heartbeat").permitAll()
 
@@ -91,6 +105,8 @@ public class SecurityConfig {
                         // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(workerAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -98,9 +114,16 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        List<String> origins;
+        if (corsAllowedOrigins != null && !corsAllowedOrigins.isBlank()) {
+            origins = Arrays.asList(corsAllowedOrigins.split(","));
+        } else {
+            origins = List.of("http://localhost:3000", "http://localhost:5173");
+        }
+        configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Api-Key",
+                "X-Webhook-Secret", "X-Hub-Signature-256", "X-Worker-Token"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

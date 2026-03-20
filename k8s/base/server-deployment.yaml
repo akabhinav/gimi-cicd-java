@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gimi-server
+  namespace: gimi
+  labels:
+    app: gimi-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gimi-server
+  template:
+    metadata:
+      labels:
+        app: gimi-server
+    spec:
+      serviceAccountName: gimi-server
+      containers:
+        - name: server
+          image: gimi/server:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            - name: GIMI_SERVER_DISTRIBUTED_MODE
+              value: "true"
+            - name: GIMI_SERVER_POSTGRES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: postgres-url
+            - name: GIMI_SERVER_POSTGRES_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: postgres-username
+            - name: GIMI_SERVER_POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: postgres-password
+            - name: GIMI_SERVER_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: jwt-secret
+            - name: GIMI_SERVER_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: webhook-secret
+            - name: GIMI_SERVER_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: redis-url
+            - name: GIMI_SERVER_DEFAULT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: admin-password
+            - name: GIMI_SERVER_CORS_ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: gimi-config
+                  key: cors-allowed-origins
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gimi-server
+  namespace: gimi
+spec:
+  selector:
+    app: gimi-server
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gimi-server
+  namespace: gimi
