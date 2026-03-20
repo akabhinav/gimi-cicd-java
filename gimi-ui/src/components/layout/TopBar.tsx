@@ -1,4 +1,4 @@
-import { Search, Bell, HelpCircle, Plus, User } from 'lucide-react'
+import { Search, Bell, HelpCircle, Plus, User, LogOut } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useLocation } from 'react-router-dom'
@@ -20,7 +20,11 @@ const pageTitles: Record<string, string> = {
   '/settings': 'Settings',
 }
 
-export function TopBar() {
+interface TopBarProps {
+  onLogout?: () => void
+}
+
+export function TopBar({ onLogout }: TopBarProps) {
   const location = useLocation()
   const pathBase = '/' + (location.pathname.split('/')[1] || '')
   const title = pageTitles[pathBase] || 'GIMI'
@@ -65,6 +69,16 @@ export function TopBar() {
         <div className="h-8 w-8 rounded-full bg-primary-500/20 border border-primary-500/30 flex items-center justify-center">
           <User className="h-4 w-4 text-primary-400" />
         </div>
+
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="p-1.5 text-text-tertiary hover:text-status-failed transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </header>
   )
