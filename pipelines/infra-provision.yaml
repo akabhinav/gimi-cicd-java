@@ -1,0 +1,42 @@
+name: infra-provision
+version: "1.0"
+variables:
+  CLOUD: aws
+  REGION: us-east-1
+triggers:
+  - type: git
+    branch: main
+    event: push
+stages:
+  - name: plan
+    steps:
+      - name: terraform-plan
+        type: shell
+        run: echo "Terraform plan for ${CLOUD}/${REGION}..."
+  - name: validate
+    depends_on: [plan]
+    steps:
+      - name: policy-check
+        type: shell
+        run: echo "OPA policy validation..."
+      - name: cost-estimate
+        type: shell
+        run: echo "Estimating costs..."
+  - name: apply
+    depends_on: [validate]
+    steps:
+      - name: terraform-apply
+        type: shell
+        run: echo "Applying infrastructure..."
+  - name: configure
+    depends_on: [apply]
+    steps:
+      - name: ansible
+        type: shell
+        run: echo "Configuring instances..."
+  - name: health-check
+    depends_on: [configure]
+    steps:
+      - name: verify
+        type: shell
+        run: echo "Health checking infrastructure..."

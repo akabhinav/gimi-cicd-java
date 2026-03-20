@@ -1,0 +1,46 @@
+name: data-pipeline
+version: "1.0"
+variables:
+  BATCH_SIZE: "1000"
+  TARGET_DB: warehouse
+triggers:
+  - type: webhook
+stages:
+  - name: extract
+    steps:
+      - name: pull-data
+        type: shell
+        run: echo "Extracting data batch=${BATCH_SIZE}..."
+  - name: validate
+    depends_on: [extract]
+    steps:
+      - name: schema-check
+        type: shell
+        run: echo "Validating schema..."
+      - name: quality-check
+        type: shell
+        run: echo "Quality checks..."
+  - name: transform
+    depends_on: [validate]
+    steps:
+      - name: etl
+        type: shell
+        run: echo "Transforming data..."
+  - name: load
+    depends_on: [transform]
+    steps:
+      - name: insert
+        type: shell
+        run: echo "Loading into ${TARGET_DB}..."
+  - name: verify
+    depends_on: [load]
+    steps:
+      - name: row-count
+        type: shell
+        run: echo "Verifying row counts..."
+  - name: notify
+    depends_on: [verify]
+    steps:
+      - name: slack
+        type: shell
+        run: echo "Sending notification..."

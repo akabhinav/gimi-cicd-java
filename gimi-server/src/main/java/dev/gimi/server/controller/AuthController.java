@@ -169,15 +169,19 @@ public class AuthController {
         ApiKey apiKey = new ApiKey(id, request.name(), keyHash, owner.id(), scopes,
                 true, now, expiresAt, null);
 
+        String scopesJson = "[" + apiKey.scopes().stream()
+                .map(s -> "\"" + s + "\"")
+                .collect(Collectors.joining(",")) + "]";
+
         String sql = "INSERT INTO api_keys (id, name, key_hash, owner_id, scopes, enabled, created_at, expires_at) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                     "VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?)";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, apiKey.id());
             ps.setString(2, apiKey.name());
             ps.setString(3, apiKey.keyHash());
             ps.setString(4, apiKey.ownerId());
-            ps.setString(5, String.join(",", apiKey.scopes()));
+            ps.setString(5, scopesJson);
             ps.setBoolean(6, apiKey.enabled());
             ps.setTimestamp(7, Timestamp.from(apiKey.createdAt()));
             ps.setTimestamp(8, apiKey.expiresAt() != null ? Timestamp.from(apiKey.expiresAt()) : null);

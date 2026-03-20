@@ -1,0 +1,81 @@
+name: microservice-full
+version: "2.0"
+variables:
+  APP_ENV: staging
+  REPLICAS: "3"
+triggers:
+  - type: git
+    branch: main
+    event: push
+  - type: git
+    branch: "release/*"
+    event: tag
+stages:
+  - name: checkout
+    steps:
+      - name: git-clone
+        type: shell
+        run: echo "Cloning repository..."
+  - name: lint
+    depends_on: [checkout]
+    steps:
+      - name: eslint
+        type: shell
+        run: echo "Linting code..."
+      - name: checkstyle
+        type: shell
+        run: echo "Running checkstyle..."
+  - name: unit-test
+    depends_on: [checkout]
+    steps:
+      - name: test
+        type: shell
+        run: echo "Running unit tests..."
+        timeout: 5m
+  - name: integration-test
+    depends_on: [unit-test]
+    steps:
+      - name: it-test
+        type: shell
+        run: echo "Running integration tests..."
+        timeout: 10m
+  - name: security-scan
+    depends_on: [lint]
+    steps:
+      - name: sast
+        type: shell
+        run: echo "SAST scanning..."
+      - name: dependency-check
+        type: shell
+        run: echo "Checking dependencies..."
+  - name: build-artifact
+    depends_on: [integration-test, security-scan]
+    steps:
+      - name: package
+        type: shell
+        run: echo "Building artifact..."
+  - name: docker-build
+    depends_on: [build-artifact]
+    steps:
+      - name: build-image
+        type: shell
+        run: echo "Building Docker image..."
+  - name: deploy-staging
+    depends_on: [docker-build]
+    steps:
+      - name: deploy
+        type: shell
+        run: echo "Deploying to staging with ${REPLICAS} replicas..."
+  - name: smoke-test
+    depends_on: [deploy-staging]
+    steps:
+      - name: smoke
+        type: shell
+        run: echo "Running smoke tests..."
+  - name: performance-test
+    depends_on: [smoke-test]
+    steps:
+      - name: load-test
+        type: shell
+        run: echo "Running load test..."
+        timeout: 15m
