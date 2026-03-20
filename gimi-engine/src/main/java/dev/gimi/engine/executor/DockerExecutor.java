@@ -116,9 +116,9 @@ public final class DockerExecutor implements StepExecutor {
             // Start container
             dockerClient.startContainerCmd(containerId).exec();
 
-            // Attach to container output and capture stdout/stderr
-            StringBuilder stdout = new StringBuilder();
-            StringBuilder stderr = new StringBuilder();
+            // Attach to container output with bounded buffer to prevent OOM at 10K scale
+            OutputBuffer stdout = new OutputBuffer();
+            OutputBuffer stderr = new OutputBuffer();
 
             final String captureContainerId = containerId;
             dockerClient.logContainerCmd(captureContainerId)

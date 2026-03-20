@@ -27,8 +27,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 
 /**
  * Main orchestration engine that executes pipelines using virtual threads.
@@ -40,14 +42,26 @@ import java.util.concurrent.Future;
  *   <li>Handling failure actions (abort, skip, retry), approval gates, and freeze windows</li>
  *   <li>Persisting execution records to an optional {@link ExecutionStore}</li>
  * </ol>
+ *
+ * <p>Optimized for 10K+ concurrent pipeline executions:
+ * <ul>
+ *   <li>Shared bounded virtual thread executor across all pipelines</li>
+ *   <li>Global concurrency semaphore prevents thread explosion</li>
+ *   <li>Cached execution plans via {@link ExecutionPlanner}</li>
+ * </ul>
  */
 public final class PipelineOrchestrator {
 
     private static final Logger LOG = LoggerFactory.getLogger(PipelineOrchestrator.class);
 
+    /** Maximum concurrent stage executions across all pipelines. */
+    private static final int MAX_GLOBAL_STAGE_CONCURRENCY = 2000;
+
     private final StepExecutorRegistry executorRegistry;
     private final ExecutionStore store;
     private final ApprovalExecutor approvalExecutor;
+    private final ExecutorService sharedExecutor;
+    private final Semaphore globalConcurrency;
 
     /**
      * Creates an orchestrator with the given executor registry and an optional execution store.
@@ -59,6 +73,8 @@ public final class PipelineOrchestrator {
         this.executorRegistry = executorRegistry;
         this.store = store;
         this.approvalExecutor = new ApprovalExecutor();
+        this.sharedExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        this.globalConcurrency = new Semaphore(MAX_GLOBAL_STAGE_CONCURRENCY);
     }
 
     /**
@@ -147,25 +163,47 @@ public final class PipelineOrchestrator {
         }
 
         if (stageNames.size() == 1) {
-            return List.of(executeStage(pipeline, stageNames.getFirst(), ctx));
+            return List.of(executeStageBounded(pipeline, stageNames.getFirst(), ctx));
         }
 
+        // Use shared executor with global concurrency semaphore — no per-batch executor creation
         List<StageResult> results = new ArrayList<>();
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<StageResult>> futures = stageNames.stream()
-                    .map(name -> executor.submit(() -> executeStage(pipeline, name, ctx)))
-                    .toList();
+        List<Future<StageResult>> futures = stageNames.stream()
+                .map(name -> sharedExecutor.submit(() -> executeStageBounded(pipeline, name, ctx)))
+                .toList();
 
-            for (Future<StageResult> future : futures) {
-                try {
-                    results.add(future.get());
-                } catch (Exception e) {
-                    LOG.error("Error executing stage in batch", e);
-                }
+        for (Future<StageResult> future : futures) {
+            try {
+                results.add(future.get());
+            } catch (Exception e) {
+                LOG.error("Error executing stage in batch", e);
             }
         }
 
         return results;
+    }
+
+    /**
+     * Executes a stage with global concurrency control. Acquires a semaphore permit
+     * before execution to prevent thread explosion at 10K+ concurrent pipelines.
+     */
+    private StageResult executeStageBounded(Pipeline pipeline, String stageName, ExecutionContext ctx) {
+        try {
+            globalConcurrency.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new StageResult.Builder()
+                    .name(stageName)
+                    .status(ExecutionStatus.CANCELLED)
+                    .startedAt(Instant.now())
+                    .finishedAt(Instant.now())
+                    .build();
+        }
+        try {
+            return executeStage(pipeline, stageName, ctx);
+        } finally {
+            globalConcurrency.release();
+        }
     }
 
     private StageResult executeStage(Pipeline pipeline, String stageName, ExecutionContext ctx) {

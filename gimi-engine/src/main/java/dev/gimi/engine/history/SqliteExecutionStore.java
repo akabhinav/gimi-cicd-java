@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.gimi.core.execution.ExecutionRecord;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,8 +26,15 @@ import java.util.Optional;
  * {@link ExecutionRecord} is serialized as JSON in the {@code data} column
  * for lossless round-tripping, while key fields are stored in dedicated
  * columns for efficient querying.
+ *
+ * <p><strong>WARNING:</strong> SQLite is single-writer and file-locked. It is NOT suitable
+ * for concurrent workloads beyond ~100 parallel operations. For production deployments
+ * with 1,000+ concurrent pipelines, use {@link PostgresExecutionStore} instead.
+ * This store will log a warning at startup if used.
  */
 public class SqliteExecutionStore implements ExecutionStore {
+
+    private static final Logger LOG = LoggerFactory.getLogger(SqliteExecutionStore.class);
 
     private static final String DEFAULT_DB_PATH =
             System.getProperty("user.home") + "/.local/share/gimi/history.db";
@@ -48,6 +58,10 @@ public class SqliteExecutionStore implements ExecutionStore {
         this.dbPath = dbPath;
         this.mapper = new ObjectMapper();
         this.mapper.registerModule(new JavaTimeModule());
+        LOG.warn("=== SQLite ExecutionStore is NOT recommended for production. ===");
+        LOG.warn("SQLite is single-writer and cannot handle >100 concurrent operations.");
+        LOG.warn("For 10K+ concurrent pipelines, use PostgresExecutionStore instead.");
+        LOG.warn("Configure gimi.server.distributed-mode=true and set postgres-url.");
         initializeDb();
     }
 

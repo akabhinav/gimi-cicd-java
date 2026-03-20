@@ -3,13 +3,21 @@ server:
 
 gimi:
   worker:
-    max-concurrent-jobs: 4
-    poll-interval-ms: 1000
-    heartbeat-interval-ms: 5000
+    # CPU-aware default: cores * 4 (minimum 8). Override for your hardware.
+    # For 10K pipelines across N workers: aim for 10000 / N jobs per worker.
+    # Example: 50 workers with max-concurrent-jobs=200 = 10,000 concurrent jobs.
+    max-concurrent-jobs: 0  # 0 = auto-detect (CPU cores * 4)
+    poll-interval-ms: 500
+    heartbeat-interval-ms: 3000
     redis-url: redis://localhost:6379
     server-url: http://localhost:8080
     labels:
       - default
+
+spring:
+  threads:
+    virtual:
+      enabled: true
 
 management:
   endpoints:

@@ -20,6 +20,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static dev.gimi.engine.executor.OutputBuffer.MAX_OUTPUT_BYTES;
+
 /**
  * Executes {@link ShellStep} instances using {@link ProcessBuilder}.
  *
@@ -75,15 +77,17 @@ public final class ShellExecutor implements StepExecutor {
 
         try {
             Process process = pb.start();
-            StringBuilder stdout = new StringBuilder();
-            StringBuilder stderr = new StringBuilder();
+            OutputBuffer stdout = new OutputBuffer();
+            OutputBuffer stderr = new OutputBuffer();
 
+            // Read output in a bounded buffer to prevent OOM on large outputs
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     LOG.info("[{}] {}", shell.name(), line);
-                    stdout.append(line).append(System.lineSeparator());
+                    stdout.append(line);
+                    stdout.append(System.lineSeparator());
                 }
             }
 

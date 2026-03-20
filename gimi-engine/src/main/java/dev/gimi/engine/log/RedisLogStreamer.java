@@ -18,15 +18,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * Redis-backed implementation of {@link LogStreamer} using Redis pub/sub for real-time
- * delivery and Redis lists for persistent history.
+ * Redis-backed implementation of {@link LogStreamer} using a single multiplexed
+ * pub/sub connection for all subscriptions.
+ *
+ * <p>Optimized for 10,000+ concurrent pipeline runs:
+ * <ul>
+ *   <li>Single shared Redis connection for all pub/sub via pattern subscribe</li>
+ *   <li>One virtual thread manages the subscription — not one per run</li>
+ *   <li>Listeners dispatched from a ConcurrentHashMap — O(1) routing</li>
+ *   <li>Log entries batched via Redis pipeline for publish + persist</li>
+ * </ul>
  *
  * <p>Log entries are appended to {@code gimi:logs:{runId}} lists with a 24-hour TTL.
  * Real-time subscribers receive entries via {@code gimi:logs:live:{runId}} pub/sub channels.
- * Each subscription runs on a dedicated virtual thread.
  */
 public final class RedisLogStreamer implements LogStreamer {
 
@@ -34,11 +42,15 @@ public final class RedisLogStreamer implements LogStreamer {
 
     private static final String LOG_KEY_PREFIX = "gimi:logs:";
     private static final String LIVE_CHANNEL_PREFIX = "gimi:logs:live:";
+    private static final String LIVE_CHANNEL_PATTERN = "gimi:logs:live:*";
     private static final int LOG_TTL_SECONDS = 86_400; // 24 hours
 
     private final JedisPool jedisPool;
     private final ObjectMapper objectMapper;
-    private final Map<String, SubscriptionHandle> subscriptions = new ConcurrentHashMap<>();
+    private final Map<String, Consumer<LogEntry>> listeners = new ConcurrentHashMap<>();
+    private final AtomicBoolean subscriberStarted = new AtomicBoolean(false);
+    private volatile JedisPubSub sharedPubSub;
+    private volatile Thread subscriberThread;
 
     /**
      * Creates a new Redis-backed log streamer.
@@ -60,9 +72,12 @@ public final class RedisLogStreamer implements LogStreamer {
         String channel = LIVE_CHANNEL_PREFIX + entry.runId();
 
         try (Jedis jedis = jedisPool.getResource()) {
-            jedis.rpush(listKey, json);
-            jedis.expire(listKey, LOG_TTL_SECONDS);
-            jedis.publish(channel, json);
+            // Batch: persist + publish + set TTL in one pipeline round-trip
+            var pipe = jedis.pipelined();
+            pipe.rpush(listKey, json);
+            pipe.expire(listKey, LOG_TTL_SECONDS);
+            pipe.publish(channel, json);
+            pipe.sync();
         }
 
         LOG.debug("Published log entry: runId={}, stage={}, step={}",
@@ -74,52 +89,18 @@ public final class RedisLogStreamer implements LogStreamer {
         Objects.requireNonNull(runId, "runId must not be null");
         Objects.requireNonNull(listener, "listener must not be null");
 
-        // Unsubscribe existing subscription for this runId if present
-        unsubscribe(runId);
-
-        String channel = LIVE_CHANNEL_PREFIX + runId;
-
-        JedisPubSub pubSub = new JedisPubSub() {
-            @Override
-            public void onMessage(String ch, String message) {
-                try {
-                    LogEntry entry = fromJson(message);
-                    listener.accept(entry);
-                } catch (Exception e) {
-                    LOG.error("Error processing log message on channel {}: {}", ch, e.getMessage(), e);
-                }
-            }
-        };
-
-        Thread subscriberThread = Thread.ofVirtual()
-                .name("log-subscriber-" + runId)
-                .start(() -> {
-                    try (Jedis jedis = jedisPool.getResource()) {
-                        jedis.subscribe(pubSub, channel);
-                    } catch (Exception e) {
-                        if (!Thread.currentThread().isInterrupted()) {
-                            LOG.error("Log subscriber for runId={} terminated unexpectedly", runId, e);
-                        }
-                    }
-                });
-
-        subscriptions.put(runId, new SubscriptionHandle(pubSub, subscriberThread));
-        LOG.debug("Subscribed to logs: runId={}", runId);
+        listeners.put(runId, listener);
+        ensureSubscriberRunning();
+        LOG.debug("Subscribed to logs: runId={} (total active: {})", runId, listeners.size());
     }
 
     @Override
     public void unsubscribe(String runId) {
         Objects.requireNonNull(runId, "runId must not be null");
 
-        SubscriptionHandle handle = subscriptions.remove(runId);
-        if (handle != null) {
-            try {
-                handle.pubSub().unsubscribe();
-            } catch (Exception e) {
-                LOG.debug("Error during unsubscribe for runId={}: {}", runId, e.getMessage());
-            }
-            handle.thread().interrupt();
-            LOG.debug("Unsubscribed from logs: runId={}", runId);
+        Consumer<LogEntry> removed = listeners.remove(runId);
+        if (removed != null) {
+            LOG.debug("Unsubscribed from logs: runId={} (remaining: {})", runId, listeners.size());
         }
     }
 
@@ -146,6 +127,57 @@ public final class RedisLogStreamer implements LogStreamer {
         }
     }
 
+    /**
+     * Ensures a single shared subscriber thread is running. Uses pattern subscribe
+     * so one Redis connection handles ALL run subscriptions.
+     */
+    private void ensureSubscriberRunning() {
+        if (subscriberStarted.compareAndSet(false, true)) {
+            sharedPubSub = new JedisPubSub() {
+                @Override
+                public void onPMessage(String pattern, String channel, String message) {
+                    // Extract runId from channel: "gimi:logs:live:{runId}"
+                    String runId = channel.substring(LIVE_CHANNEL_PREFIX.length());
+                    Consumer<LogEntry> listener = listeners.get(runId);
+                    if (listener != null) {
+                        try {
+                            LogEntry entry = fromJson(message);
+                            listener.accept(entry);
+                        } catch (Exception e) {
+                            LOG.error("Error processing log message on channel {}: {}",
+                                    channel, e.getMessage(), e);
+                        }
+                    }
+                }
+            };
+
+            subscriberThread = Thread.ofVirtual()
+                    .name("log-subscriber-shared")
+                    .start(() -> {
+                        while (!Thread.currentThread().isInterrupted()) {
+                            try (Jedis jedis = jedisPool.getResource()) {
+                                LOG.info("Starting shared log subscriber on pattern: {}", LIVE_CHANNEL_PATTERN);
+                                jedis.psubscribe(sharedPubSub, LIVE_CHANNEL_PATTERN);
+                            } catch (Exception e) {
+                                if (Thread.currentThread().isInterrupted()) {
+                                    LOG.debug("Shared log subscriber interrupted, shutting down");
+                                    break;
+                                }
+                                LOG.error("Shared log subscriber disconnected, reconnecting in 1s", e);
+                                try {
+                                    Thread.sleep(1000);
+                                } catch (InterruptedException ie) {
+                                    Thread.currentThread().interrupt();
+                                    break;
+                                }
+                            }
+                        }
+                    });
+
+            LOG.info("Shared log subscriber thread started (handles all run subscriptions)");
+        }
+    }
+
     private String toJson(LogEntry entry) {
         try {
             return objectMapper.writeValueAsString(entry);
@@ -161,6 +193,4 @@ public final class RedisLogStreamer implements LogStreamer {
             throw new UncheckedIOException("Failed to deserialize LogEntry", e);
         }
     }
-
-    private record SubscriptionHandle(JedisPubSub pubSub, Thread thread) {}
 }

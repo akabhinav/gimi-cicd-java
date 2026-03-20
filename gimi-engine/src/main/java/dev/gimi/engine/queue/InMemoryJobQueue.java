@@ -13,76 +13,78 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * In-memory implementation of {@link JobQueue} for testing and single-node deployments.
  *
- * <p>Uses a {@link ConcurrentLinkedDeque} for the priority queue and a
- * {@link ConcurrentHashMap} for job storage. Thread-safe but not distributed.
+ * <p>Uses a {@link PriorityBlockingQueue} for O(log n) priority-ordered dequeue
+ * and a {@link ConcurrentHashMap} for O(1) job lookups. Thread-safe but not distributed.
+ *
+ * <p>Bounded at {@value #MAX_QUEUE_CAPACITY} jobs to prevent OOM under high load.
+ * For production 10K+ workloads, use {@link RedisJobQueue} instead.
  */
 public final class InMemoryJobQueue implements JobQueue {
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryJobQueue.class);
 
-    private final ConcurrentLinkedDeque<String> queue = new ConcurrentLinkedDeque<>();
+    /** Maximum queued jobs to prevent unbounded memory growth. */
+    static final int MAX_QUEUE_CAPACITY = 50_000;
+
+    private final PriorityBlockingQueue<JobEntry> queue;
     private final Map<String, Job> jobs = new ConcurrentHashMap<>();
     private final Map<String, Instant> heartbeats = new ConcurrentHashMap<>();
-    private final ReentrantLock dequeueLock = new ReentrantLock();
+    private final AtomicLong sequenceCounter = new AtomicLong(0);
+
+    public InMemoryJobQueue() {
+        this.queue = new PriorityBlockingQueue<>(1024,
+                Comparator.<JobEntry>comparingInt(e -> e.priority)
+                        .thenComparingLong(e -> e.sequence));
+    }
 
     @Override
     public void enqueue(Job job) {
-        jobs.put(job.id(), job);
-        // Insert in priority order (lower priority value = higher priority)
-        dequeueLock.lock();
-        try {
-            queue.addLast(job.id());
-        } finally {
-            dequeueLock.unlock();
+        if (jobs.size() >= MAX_QUEUE_CAPACITY) {
+            LOG.error("Job queue capacity exhausted ({} jobs). Rejecting job: id={}, pipeline={}",
+                    MAX_QUEUE_CAPACITY, job.id(), job.pipelineName());
+            throw new IllegalStateException("Job queue at capacity (" + MAX_QUEUE_CAPACITY
+                    + "). Use RedisJobQueue for production workloads.");
         }
+
+        jobs.put(job.id(), job);
+        queue.offer(new JobEntry(job.id(), job.priority(), sequenceCounter.getAndIncrement()));
         LOG.debug("Enqueued job: id={}, priority={}, pipeline={}", job.id(), job.priority(), job.pipelineName());
     }
 
     @Override
     public Optional<Job> dequeue(String workerId, Set<String> labels) {
-        dequeueLock.lock();
-        try {
-            // Find the highest-priority job (lowest priority value) in the queue
-            String bestId = null;
-            int bestPriority = Integer.MAX_VALUE;
-
-            for (String jobId : queue) {
-                Job job = jobs.get(jobId);
-                if (job != null && job.priority() < bestPriority) {
-                    bestPriority = job.priority();
-                    bestId = jobId;
-                }
-            }
-
-            if (bestId == null) {
-                return Optional.empty();
-            }
-
-            queue.remove(bestId);
-            Job job = jobs.get(bestId);
-
-            Job assigned = new Job(
-                    job.id(), job.pipelineName(), job.runId(), job.stageName(),
-                    JobStatus.ASSIGNED, workerId, job.pipelineYaml(),
-                    job.variables(), job.secrets(), job.priority(),
-                    job.maxRetries(), job.retryCount(), job.createdAt(),
-                    Instant.now(), null, job.timeoutSeconds()
-            );
-
-            jobs.put(assigned.id(), assigned);
-            heartbeats.put(assigned.id(), Instant.now());
-
-            LOG.debug("Dequeued job: id={}, assignedTo={}", assigned.id(), workerId);
-            return Optional.of(assigned);
-        } finally {
-            dequeueLock.unlock();
+        // O(log n) poll from priority queue — no locking needed
+        JobEntry entry = queue.poll();
+        if (entry == null) {
+            return Optional.empty();
         }
+
+        Job job = jobs.get(entry.jobId);
+        if (job == null) {
+            // Job was removed (cancelled) between enqueue and dequeue
+            LOG.debug("Skipped removed job: id={}", entry.jobId);
+            return dequeue(workerId, labels); // try next
+        }
+
+        Job assigned = new Job(
+                job.id(), job.pipelineName(), job.runId(), job.stageName(),
+                JobStatus.ASSIGNED, workerId, job.pipelineYaml(),
+                job.variables(), job.secrets(), job.priority(),
+                job.maxRetries(), job.retryCount(), job.createdAt(),
+                Instant.now(), null, job.timeoutSeconds()
+        );
+
+        jobs.put(assigned.id(), assigned);
+        heartbeats.put(assigned.id(), Instant.now());
+
+        LOG.debug("Dequeued job: id={}, assignedTo={}", assigned.id(), workerId);
+        return Optional.of(assigned);
     }
 
     @Override
@@ -153,4 +155,10 @@ public final class InMemoryJobQueue implements JobQueue {
                 || status == JobStatus.CANCELLED
                 || status == JobStatus.TIMED_OUT;
     }
+
+    /**
+     * Internal priority queue entry. Uses priority + insertion order for FIFO
+     * within the same priority level.
+     */
+    private record JobEntry(String jobId, int priority, long sequence) {}
 }

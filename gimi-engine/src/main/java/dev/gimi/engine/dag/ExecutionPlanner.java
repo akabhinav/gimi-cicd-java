@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Converts a {@link Pipeline} into ordered execution batches.
@@ -19,8 +20,22 @@ import java.util.Set;
  * <p>Stages within the same batch have no mutual dependencies and can be executed in parallel.
  * Batches are ordered so that all dependencies of stages in batch N are contained in batches
  * 0 through N-1.
+ *
+ * <p>Includes a thread-safe execution plan cache keyed by pipeline name + version to avoid
+ * rebuilding DAGs for repeated executions of the same pipeline definition. At 10K concurrent
+ * pipelines, this eliminates redundant JGraphT allocations and GC pressure.
  */
 public final class ExecutionPlanner {
+
+    /**
+     * Thread-safe cache of execution plans. Keyed by "{pipelineName}:{version}:{stageCount}".
+     * Entries are immutable lists, safe for concurrent reads.
+     */
+    private static final ConcurrentHashMap<String, List<List<String>>> PLAN_CACHE =
+            new ConcurrentHashMap<>(256);
+
+    /** Maximum cache entries to prevent unbounded memory growth. */
+    private static final int MAX_CACHE_SIZE = 10_000;
 
     private final DagBuilder dagBuilder;
 
@@ -42,50 +57,31 @@ public final class ExecutionPlanner {
 
     /**
      * Plans the execution of all stages in the pipeline as ordered batches.
-     *
-     * <p>Stages are grouped into batches where each batch contains stages whose dependencies
-     * have all been satisfied by previous batches. Stages within the same batch can be executed
-     * in parallel.
+     * Results are cached by pipeline identity for repeated executions.
      *
      * @param pipeline the pipeline to plan
      * @return an ordered list of batches, where each batch is a list of stage names
      */
     public List<List<String>> plan(Pipeline pipeline) {
-        DirectedAcyclicGraph<String, DefaultEdge> dag = dagBuilder.build(pipeline);
+        String cacheKey = buildCacheKey(pipeline);
 
-        // Assign each stage to a batch based on its longest path from a root
-        Map<String, Integer> batchIndex = new HashMap<>();
-        TopologicalOrderIterator<String, DefaultEdge> iterator = new TopologicalOrderIterator<>(dag);
-
-        while (iterator.hasNext()) {
-            String stage = iterator.next();
-            int maxPredecessorBatch = -1;
-            for (DefaultEdge edge : dag.incomingEdgesOf(stage)) {
-                String predecessor = dag.getEdgeSource(edge);
-                maxPredecessorBatch = Math.max(maxPredecessorBatch, batchIndex.getOrDefault(predecessor, 0));
-            }
-            batchIndex.put(stage, maxPredecessorBatch + 1);
+        List<List<String>> cached = PLAN_CACHE.get(cacheKey);
+        if (cached != null) {
+            return cached;
         }
 
-        // Group stages by batch index
-        int maxBatch = batchIndex.values().stream().mapToInt(Integer::intValue).max().orElse(-1);
-        List<List<String>> batches = new ArrayList<>();
-        for (int i = 0; i <= maxBatch; i++) {
-            batches.add(new ArrayList<>());
-        }
-        for (Map.Entry<String, Integer> entry : batchIndex.entrySet()) {
-            batches.get(entry.getValue()).add(entry.getKey());
+        List<List<String>> plan = computePlan(pipeline);
+
+        // Only cache if within limits
+        if (PLAN_CACHE.size() < MAX_CACHE_SIZE) {
+            PLAN_CACHE.putIfAbsent(cacheKey, plan);
         }
 
-        return batches;
+        return plan;
     }
 
     /**
      * Plans execution for a single target stage, optionally including its transitive dependencies.
-     *
-     * <p>When {@code includeDeps} is {@code true}, returns ordered batches containing all
-     * transitive dependencies followed by the target stage itself. When {@code false}, returns
-     * a single batch containing only the target stage.
      *
      * @param pipeline    the pipeline containing the stage
      * @param stageName   the name of the target stage
@@ -128,6 +124,71 @@ public final class ExecutionPlanner {
         }
 
         return filteredPlan;
+    }
+
+    /**
+     * Clears the execution plan cache. Useful for testing or after pipeline definitions change.
+     */
+    public static void clearCache() {
+        PLAN_CACHE.clear();
+    }
+
+    /**
+     * Returns the current cache size for monitoring.
+     */
+    public static int cacheSize() {
+        return PLAN_CACHE.size();
+    }
+
+    private List<List<String>> computePlan(Pipeline pipeline) {
+        DirectedAcyclicGraph<String, DefaultEdge> dag = dagBuilder.build(pipeline);
+
+        // Assign each stage to a batch based on its longest path from a root
+        Map<String, Integer> batchIndex = new HashMap<>();
+        TopologicalOrderIterator<String, DefaultEdge> iterator = new TopologicalOrderIterator<>(dag);
+
+        while (iterator.hasNext()) {
+            String stage = iterator.next();
+            int maxPredecessorBatch = -1;
+            for (DefaultEdge edge : dag.incomingEdgesOf(stage)) {
+                String predecessor = dag.getEdgeSource(edge);
+                maxPredecessorBatch = Math.max(maxPredecessorBatch, batchIndex.getOrDefault(predecessor, 0));
+            }
+            batchIndex.put(stage, maxPredecessorBatch + 1);
+        }
+
+        // Group stages by batch index
+        int maxBatch = batchIndex.values().stream().mapToInt(Integer::intValue).max().orElse(-1);
+        List<List<String>> batches = new ArrayList<>();
+        for (int i = 0; i <= maxBatch; i++) {
+            batches.add(new ArrayList<>());
+        }
+        for (Map.Entry<String, Integer> entry : batchIndex.entrySet()) {
+            batches.get(entry.getValue()).add(entry.getKey());
+        }
+
+        // Return immutable lists for thread-safe caching
+        return batches.stream()
+                .map(List::copyOf)
+                .toList();
+    }
+
+    private String buildCacheKey(Pipeline pipeline) {
+        String version = pipeline.version() != null ? pipeline.version() : "0";
+        int stageCount = pipeline.stages() != null ? pipeline.stages().size() : 0;
+        // Include stage dependency fingerprint for correctness
+        long depHash = 0;
+        if (pipeline.stages() != null) {
+            for (var stage : pipeline.stages()) {
+                depHash = depHash * 31 + stage.name().hashCode();
+                if (stage.dependsOn() != null) {
+                    for (String dep : stage.dependsOn()) {
+                        depHash = depHash * 31 + dep.hashCode();
+                    }
+                }
+            }
+        }
+        return pipeline.name() + ":" + version + ":" + stageCount + ":" + depHash;
     }
 
     private void collectAncestors(DirectedAcyclicGraph<String, DefaultEdge> dag, String vertex, Set<String> ancestors) {
