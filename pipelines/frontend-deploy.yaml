@@ -1,0 +1,38 @@
+name: frontend-deploy
+version: "1.0"
+triggers:
+  - type: git
+    branch: main
+    event: pull_request
+stages:
+  - name: install
+    steps:
+      - name: npm-install
+        image: node:20
+        commands:
+          - npm ci
+  - name: test
+    depends_on: [install]
+    steps:
+      - name: lint
+        image: node:20
+        commands:
+          - npm run lint
+      - name: unit-test
+        image: node:20
+        commands:
+          - npm test
+  - name: build
+    depends_on: [test]
+    steps:
+      - name: build
+        image: node:20
+        commands:
+          - npm run build
+  - name: deploy
+    depends_on: [build]
+    steps:
+      - name: upload-cdn
+        image: amazon/aws-cli
+        commands:
+          - aws s3 sync dist/ s3://cdn-bucket/

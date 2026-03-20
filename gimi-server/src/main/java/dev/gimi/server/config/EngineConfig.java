@@ -1,21 +1,32 @@
 package dev.gimi.server.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import dev.gimi.engine.GimiEngine;
 import dev.gimi.engine.analytics.DoraMetricsService;
+import dev.gimi.engine.audit.AuditService;
+import dev.gimi.engine.audit.PostgresAuditService;
 import dev.gimi.engine.chaos.ChaosEngineService;
+import dev.gimi.engine.connector.ConnectorService;
+import dev.gimi.engine.connector.DefaultConnectorService;
 import dev.gimi.engine.cost.CloudCostService;
 import dev.gimi.engine.ff.FeatureFlagService;
 import dev.gimi.engine.gitops.GitOpsService;
+import dev.gimi.engine.governance.OpaPolicyEngine;
+import dev.gimi.engine.governance.PolicyEngine;
 import dev.gimi.engine.history.ExecutionStore;
 import dev.gimi.engine.history.PostgresExecutionStore;
 import dev.gimi.engine.log.LogStreamer;
 import dev.gimi.engine.log.RedisLogStreamer;
 import dev.gimi.engine.queue.JobQueue;
 import dev.gimi.engine.queue.RedisJobQueue;
+import dev.gimi.engine.secret.vault.DefaultVaultSecretManager;
+import dev.gimi.engine.secret.vault.VaultSecretManager;
 import dev.gimi.engine.security.SecurityScanService;
 import dev.gimi.engine.slo.SloService;
+import dev.gimi.engine.sso.OidcSsoService;
+import dev.gimi.engine.sso.SsoService;
 import dev.gimi.engine.ti.TestIntelligenceService;
 import dev.gimi.engine.verification.ContinuousVerificationService;
 import org.slf4j.Logger;
@@ -177,5 +188,37 @@ public class EngineConfig {
     @Bean
     public CloudCostService cloudCostService() {
         return new CloudCostService();
+    }
+
+    // === Integration services (audit, SSO, governance, connectors, secrets) ===
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper().findAndRegisterModules();
+    }
+
+    @Bean
+    public AuditService auditService(HikariDataSource dataSource, ObjectMapper objectMapper) {
+        return new PostgresAuditService(dataSource, objectMapper);
+    }
+
+    @Bean
+    public SsoService ssoService(ObjectMapper objectMapper) {
+        return new OidcSsoService(objectMapper);
+    }
+
+    @Bean
+    public PolicyEngine policyEngine(ObjectMapper objectMapper) {
+        return new OpaPolicyEngine(objectMapper);
+    }
+
+    @Bean
+    public ConnectorService connectorService() {
+        return new DefaultConnectorService();
+    }
+
+    @Bean
+    public VaultSecretManager vaultSecretManager(ObjectMapper objectMapper) {
+        return new DefaultVaultSecretManager(objectMapper);
     }
 }

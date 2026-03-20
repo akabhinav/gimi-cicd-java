@@ -51,10 +51,14 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
                 if (rolesStr != null && !rolesStr.isBlank()) {
-                    Arrays.stream(rolesStr.split(","))
-                            .map(String::trim)
-                            .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                            .forEach(authorities::add);
+                    String cleaned = rolesStr.replaceAll("[\\[\\]\"\\s]", "");
+                    if (!cleaned.isEmpty()) {
+                        Arrays.stream(cleaned.split(","))
+                                .map(String::trim)
+                                .filter(s -> !s.isEmpty())
+                                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                                .forEach(authorities::add);
+                    }
                 }
 
                 return new org.springframework.security.core.userdetails.User(

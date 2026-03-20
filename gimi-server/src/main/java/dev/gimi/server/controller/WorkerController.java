@@ -78,11 +78,14 @@ public class WorkerController {
     public ResponseEntity<Map<String, Object>> registerWorker(@Valid @RequestBody RegisterWorkerRequest request) {
         String id = request.id() != null ? request.id() : UUID.randomUUID().toString().substring(0, 8);
         Instant now = Instant.now();
-        String labels = request.labels() != null ? String.join(",", request.labels()) : "";
+        String labelsJson = "[]";
+        if (request.labels() != null && !request.labels().isEmpty()) {
+            labelsJson = "[" + request.labels().stream().map(l -> "\"" + l + "\"").collect(java.util.stream.Collectors.joining(",")) + "]";
+        }
 
         String sql = "INSERT INTO workers (id, hostname, port, status, max_concurrent_jobs, active_jobs, " +
                      "labels, last_heartbeat, registered_at, version) " +
-                     "VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?) " +
+                     "VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?, ?, ?) " +
                      "ON CONFLICT (id) DO UPDATE SET hostname = EXCLUDED.hostname, port = EXCLUDED.port, " +
                      "status = 'ONLINE', last_heartbeat = EXCLUDED.last_heartbeat, version = EXCLUDED.version";
 
@@ -93,7 +96,7 @@ public class WorkerController {
             ps.setInt(3, request.port());
             ps.setString(4, WorkerStatus.ONLINE.name());
             ps.setInt(5, request.maxConcurrentJobs() > 0 ? request.maxConcurrentJobs() : 4);
-            ps.setString(6, labels);
+            ps.setString(6, labelsJson);
             ps.setTimestamp(7, Timestamp.from(now));
             ps.setTimestamp(8, Timestamp.from(now));
             ps.setString(9, request.version());

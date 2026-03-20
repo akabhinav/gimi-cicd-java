@@ -108,17 +108,17 @@ public class AuthController {
                 : (hasUsers ? Set.of(Role.VIEWER) : Set.of(Role.ADMIN));
         Instant now = Instant.now();
 
-        String rolesStr = roles.stream().map(Role::name).collect(Collectors.joining(","));
+        String rolesJson = "[" + roles.stream().map(r -> "\"" + r.name() + "\"").collect(Collectors.joining(",")) + "]";
 
         String sql = "INSERT INTO users (id, username, password_hash, email, roles, enabled, created_at) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?)";
+                     "VALUES (?, ?, ?, ?, ?::jsonb, ?, ?)";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, id);
             ps.setString(2, request.username());
             ps.setString(3, passwordHash);
             ps.setString(4, request.email());
-            ps.setString(5, rolesStr);
+            ps.setString(5, rolesJson);
             ps.setBoolean(6, true);
             ps.setTimestamp(7, Timestamp.from(now));
             ps.executeUpdate();
@@ -235,10 +235,15 @@ public class AuthController {
                 Set<Role> roles = new HashSet<>();
                 String rolesStr = rs.getString("roles");
                 if (rolesStr != null && !rolesStr.isBlank()) {
-                    Arrays.stream(rolesStr.split(","))
-                            .map(String::trim)
-                            .map(Role::valueOf)
-                            .forEach(roles::add);
+                    // Parse JSONB array like ["ADMIN"] or CSV like "ADMIN,VIEWER"
+                    String cleaned = rolesStr.replaceAll("[\\[\\]\"\\s]", "");
+                    if (!cleaned.isEmpty()) {
+                        Arrays.stream(cleaned.split(","))
+                                .map(String::trim)
+                                .filter(s -> !s.isEmpty())
+                                .map(Role::valueOf)
+                                .forEach(roles::add);
+                    }
                 }
                 return new User(
                         rs.getString("id"),

@@ -1,0 +1,45 @@
+name: backend-ci
+version: "1.0"
+triggers:
+  - type: git
+    branch: main
+    event: push
+stages:
+  - name: build
+    steps:
+      - name: compile
+        image: maven:3.9
+        commands:
+          - mvn compile
+      - name: unit-test
+        image: maven:3.9
+        commands:
+          - mvn test
+  - name: security-scan
+    depends_on: [build]
+    steps:
+      - name: sonar-scan
+        image: sonarsource/sonar-scanner
+        commands:
+          - sonar-scanner
+  - name: docker-build
+    depends_on: [build]
+    steps:
+      - name: build-image
+        image: docker:24
+        commands:
+          - docker build -t app:latest .
+      - name: push-image
+        image: docker:24
+        commands:
+          - docker push registry/app:latest
+  - name: deploy-staging
+    depends_on: [security-scan, docker-build]
+    strategy:
+      type: canary
+      increments: [10, 50, 100]
+    steps:
+      - name: deploy
+        image: bitnami/kubectl
+        commands:
+          - kubectl apply -f k8s/staging/

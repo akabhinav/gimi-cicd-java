@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/actuator/prometheus").permitAll()
                         .requestMatchers("/webhook").permitAll()
+                        .requestMatchers("/error").permitAll()
 
                         // Admin-only endpoints
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
@@ -65,6 +66,25 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/artifacts/**").hasAnyRole("ADMIN", "OPERATOR", "DEVELOPER")
                         .requestMatchers(HttpMethod.GET, "/api/approvals/**").hasAnyRole("ADMIN", "OPERATOR", "DEVELOPER")
                         .requestMatchers(HttpMethod.GET, "/api/workers/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.POST, "/api/workers/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers(HttpMethod.DELETE, "/api/workers/**").hasAnyRole("ADMIN", "OPERATOR")
+
+                        // Authenticated endpoints for all remaining APIs
+                        .requestMatchers("/api/connectors/**").authenticated()
+                        .requestMatchers("/api/slo/**").authenticated()
+                        .requestMatchers("/api/policies/**").authenticated()
+                        .requestMatchers("/api/secrets/**").authenticated()
+                        .requestMatchers("/api/sso/**").authenticated()
+                        .requestMatchers("/api/feature-flags/**").authenticated()
+                        .requestMatchers("/api/audit/**").authenticated()
+                        .requestMatchers("/api/analytics/**").authenticated()
+                        .requestMatchers("/api/tenants/**").authenticated()
+                        .requestMatchers("/api/rbac/**").authenticated()
+                        .requestMatchers("/api/gitops/**").authenticated()
+                        .requestMatchers("/api/chaos/**").authenticated()
+                        .requestMatchers("/api/verification/**").authenticated()
+                        .requestMatchers("/api/costs/**").authenticated()
+                        .requestMatchers("/api/security/**").authenticated()
 
                         // Everything else requires authentication
                         .anyRequest().authenticated()
