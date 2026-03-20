@@ -1,0 +1,89 @@
+version: "3.9"
+
+services:
+  # --- Infrastructure ---
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gimi
+      POSTGRES_USER: gimi
+      POSTGRES_PASSWORD: gimi
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./gimi-engine/src/main/resources/db/migration/V1__init.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gimi"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- GIMI Server ---
+  gimi-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: server
+    ports:
+      - "8080:8080"
+    environment:
+      GIMI_SERVER_DISTRIBUTED_MODE: "true"
+      GIMI_SERVER_POSTGRES_URL: jdbc:postgresql://postgres:5432/gimi
+      GIMI_SERVER_POSTGRES_USERNAME: gimi
+      GIMI_SERVER_POSTGRES_PASSWORD: gimi
+      GIMI_SERVER_REDIS_URL: redis://redis:6379
+      GIMI_SERVER_PIPELINE_DIR: /app/pipelines
+      GIMI_SERVER_JWT_SECRET: change-me-in-production-min-32-chars!!
+    volumes:
+      - ./pipelines:/app/pipelines
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # --- GIMI Workers (scale with --scale gimi-worker=N) ---
+  gimi-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    environment:
+      GIMI_WORKER_REDIS_URL: redis://redis:6379
+      GIMI_WORKER_SERVER_URL: http://gimi-server:8080
+      GIMI_WORKER_MAX_CONCURRENT_JOBS: "200"
+    depends_on:
+      gimi-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --- GIMI UI ---
+  gimi-ui:
+    build:
+      context: ./gimi-ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      gimi-server:
+        condition: service_healthy
+
+volumes:
+  pgdata:
