@@ -4,24 +4,58 @@ metadata:
   name: gimi-server
   namespace: gimi
   labels:
-    app: gimi-server
+    app.kubernetes.io/name: gimi-server
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: gimi-cicd
 spec:
   replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
-      app: gimi-server
+      app.kubernetes.io/name: gimi-server
   template:
     metadata:
       labels:
-        app: gimi-server
+        app.kubernetes.io/name: gimi-server
+        app.kubernetes.io/component: server
+        app.kubernetes.io/part-of: gimi-cicd
     spec:
       serviceAccountName: gimi-server
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gimi-server
       containers:
         - name: server
           image: gimi/server:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
               name: http
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: prod
@@ -67,6 +101,8 @@ spec:
                 configMapKeyRef:
                   name: gimi-config
                   key: cors-allowed-origins
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseZGC"
           resources:
             requests:
               cpu: 500m
@@ -74,20 +110,6 @@ spec:
             limits:
               cpu: "2"
               memory: 2Gi
-          livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness
-              port: http
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: http
-            initialDelaySeconds: 15
-            periodSeconds: 5
-            failureThreshold: 5
           startupProbe:
             httpGet:
               path: /actuator/health
@@ -95,15 +117,41 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 5
             failureThreshold: 30
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: gimi-server
   namespace: gimi
+  labels:
+    app.kubernetes.io/name: gimi-server
+    app.kubernetes.io/component: server
+    app.kubernetes.io/part-of: gimi-cicd
 spec:
   selector:
-    app: gimi-server
+    app.kubernetes.io/name: gimi-server
   ports:
     - port: 8080
       targetPort: http
@@ -115,3 +163,17 @@ kind: ServiceAccount
 metadata:
   name: gimi-server
   namespace: gimi
+  labels:
+    app.kubernetes.io/name: gimi-server
+    app.kubernetes.io/part-of: gimi-cicd
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gimi-server
+  namespace: gimi
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gimi-server

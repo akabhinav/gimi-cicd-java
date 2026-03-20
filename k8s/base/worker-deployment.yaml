@@ -4,24 +4,58 @@ metadata:
   name: gimi-worker
   namespace: gimi
   labels:
-    app: gimi-worker
+    app.kubernetes.io/name: gimi-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: gimi-cicd
 spec:
   replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
   selector:
     matchLabels:
-      app: gimi-worker
+      app.kubernetes.io/name: gimi-worker
   template:
     metadata:
       labels:
-        app: gimi-worker
+        app.kubernetes.io/name: gimi-worker
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/part-of: gimi-cicd
     spec:
       serviceAccountName: gimi-worker
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gimi-worker
       containers:
         - name: worker
           image: gimi/worker:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081
               name: http
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           env:
             - name: GIMI_WORKER_REDIS_URL
               valueFrom:
@@ -32,6 +66,13 @@ spec:
               value: http://gimi-server:8080
             - name: GIMI_WORKER_MAX_CONCURRENT_JOBS
               value: "200"
+            - name: GIMI_WORKER_WORKER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gimi-secrets
+                  key: worker-token
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseZGC"
           resources:
             requests:
               cpu: 500m
@@ -39,19 +80,35 @@ spec:
             limits:
               cpu: "4"
               memory: 4Gi
-          livenessProbe:
-            httpGet:
-              path: /actuator/health
-              port: http
-            initialDelaySeconds: 15
-            periodSeconds: 10
-          readinessProbe:
+          startupProbe:
             httpGet:
               path: /actuator/health
               port: http
             initialDelaySeconds: 10
             periodSeconds: 5
-      terminationGracePeriodSeconds: 90
+            failureThreshold: 30
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 5
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -65,6 +122,19 @@ spec:
     name: gimi-worker
   minReplicas: 2
   maxReplicas: 50
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 5
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
   metrics:
     - type: Resource
       resource:
@@ -72,9 +142,29 @@ spec:
         target:
           type: Utilization
           averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: gimi-worker
   namespace: gimi
+  labels:
+    app.kubernetes.io/name: gimi-worker
+    app.kubernetes.io/part-of: gimi-cicd
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gimi-worker
+  namespace: gimi
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gimi-worker

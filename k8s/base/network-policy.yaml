@@ -1,0 +1,103 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gimi-server
+  namespace: gimi
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gimi-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8080
+          protocol: TCP
+    # Allow traffic from workers (health reporting)
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gimi-worker
+      ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    # PostgreSQL
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 5432
+          protocol: TCP
+    # Redis
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 6379
+          protocol: TCP
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gimi-worker
+  namespace: gimi
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gimi-worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only allow Prometheus scraping and health checks
+    - ports:
+        - port: 8081
+          protocol: TCP
+  egress:
+    # Redis
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 6379
+          protocol: TCP
+    # Server API (for registration/heartbeat)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gimi-server
+      ports:
+        - port: 8080
+          protocol: TCP
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Default deny all traffic for the namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: gimi
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

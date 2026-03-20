@@ -3,9 +3,14 @@ kind: Kustomization
 
 namespace: gimi
 
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: gimi-cicd
+
 resources:
   - namespace.yaml
   - config.yaml
   - server-deployment.yaml
   - worker-deployment.yaml
+  - network-policy.yaml
   - ingress.yaml
