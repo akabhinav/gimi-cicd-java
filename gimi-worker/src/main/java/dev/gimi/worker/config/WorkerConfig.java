@@ -40,6 +40,7 @@ public class WorkerConfig {
     private long heartbeatIntervalMs = 3000;
     private String redisUrl = "redis://localhost:6379";
     private String serverUrl = "http://localhost:8080";
+    private String workerToken = "";
 
     /**
      * Returns the unique worker identifier, auto-generating a UUID if not explicitly configured.
@@ -140,5 +141,13 @@ public class WorkerConfig {
 
     public void setServerUrl(String serverUrl) {
         this.serverUrl = serverUrl;
+    }
+
+    public String getWorkerToken() {
+        return workerToken;
+    }
+
+    public void setWorkerToken(String workerToken) {
+        this.workerToken = workerToken;
     }
 }

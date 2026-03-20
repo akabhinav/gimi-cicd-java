@@ -63,12 +63,13 @@ public class WorkerHealthReporter {
 
         try {
             String json = objectMapper.writeValueAsString(node);
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(config.getServerUrl() + "/api/workers/register"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(json))
-                    .timeout(Duration.ofSeconds(10))
-                    .build();
+                    .timeout(Duration.ofSeconds(10));
+            addWorkerToken(reqBuilder);
+            HttpRequest request = reqBuilder.build();
 
             HttpResponse<String> response = httpClient.send(request,
                     HttpResponse.BodyHandlers.ofString());
@@ -97,12 +98,13 @@ public class WorkerHealthReporter {
             WorkerNode node = buildWorkerNode(status);
 
             String json = objectMapper.writeValueAsString(node);
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(config.getServerUrl() + "/api/workers/heartbeat"))
                     .header("Content-Type", "application/json")
                     .PUT(HttpRequest.BodyPublishers.ofString(json))
-                    .timeout(Duration.ofSeconds(5))
-                    .build();
+                    .timeout(Duration.ofSeconds(5));
+            addWorkerToken(reqBuilder);
+            HttpRequest request = reqBuilder.build();
 
             httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response -> {
@@ -187,16 +189,24 @@ public class WorkerHealthReporter {
         try {
             WorkerNode node = buildWorkerNode(status);
             String json = objectMapper.writeValueAsString(node);
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(config.getServerUrl() + "/api/workers/heartbeat"))
                     .header("Content-Type", "application/json")
                     .PUT(HttpRequest.BodyPublishers.ofString(json))
-                    .timeout(Duration.ofSeconds(5))
-                    .build();
+                    .timeout(Duration.ofSeconds(5));
+            addWorkerToken(reqBuilder);
+            HttpRequest request = reqBuilder.build();
 
             httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         } catch (Exception e) {
             LOG.warn("Failed to report status {} to server: {}", status, e.getMessage());
+        }
+    }
+
+    private void addWorkerToken(HttpRequest.Builder builder) {
+        String token = config.getWorkerToken();
+        if (token != null && !token.isBlank()) {
+            builder.header("X-Worker-Token", token);
         }
     }
 
