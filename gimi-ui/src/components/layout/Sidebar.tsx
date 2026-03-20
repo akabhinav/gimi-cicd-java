@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, GitBranch, Play, Server, Shield, Flag,
   Settings, BarChart3, FileText, Activity, ChevronLeft, ChevronRight,
-  Plug, Bell, BookTemplate, Scale, ClipboardList
+  Plug, Bell, BookTemplate, Scale, ClipboardList, Layers, Cloud
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -30,6 +30,13 @@ const navSections = [
       { to: '/security', icon: Shield, label: 'Security Tests' },
       { to: '/feature-flags', icon: Flag, label: 'Feature Flags' },
       { to: '/audit', icon: ClipboardList, label: 'Audit Trail' },
+    ],
+  },
+  {
+    label: 'Infrastructure',
+    items: [
+      { to: '/iac', icon: Layers, label: 'IaC Management' },
+      { to: '/saas', icon: Cloud, label: 'SaaS Hosting' },
     ],
   },
   {

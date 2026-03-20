@@ -16,6 +16,8 @@ import { ConnectorsPage } from '@/pages/ConnectorsPage'
 import { TemplatesPage } from '@/pages/TemplatesPage'
 import { NotificationsPage } from '@/pages/NotificationsPage'
 import { GovernancePage } from '@/pages/GovernancePage'
+import { IacPage } from '@/pages/IacPage'
+import { SaasHostingPage } from '@/pages/SaasHostingPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { useAuth } from '@/hooks/useAuth'
@@ -49,6 +51,8 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/governance" element={<GovernancePage />} />
+          <Route path="/iac" element={<IacPage />} />
+          <Route path="/saas" element={<SaasHostingPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
