@@ -2,6 +2,8 @@ package dev.gimi.engine.secret.vault;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.gimi.core.model.secret.*;
+import dev.gimi.engine.secret.aws.AwsKmsProvider;
+import dev.gimi.engine.secret.aws.AwsSecretsManagerProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,10 +21,14 @@ public class DefaultVaultSecretManager implements VaultSecretManager {
     private final Map<String, String> localSecretValues = new ConcurrentHashMap<>();
     private final ObjectMapper mapper;
     private final HttpClient httpClient;
+    private final AwsSecretsManagerProvider awsSecretsManagerProvider;
+    private final AwsKmsProvider awsKmsProvider;
 
     public DefaultVaultSecretManager(ObjectMapper mapper) {
         this.mapper = mapper;
         this.httpClient = HttpClient.newBuilder().build();
+        this.awsSecretsManagerProvider = new AwsSecretsManagerProvider(mapper);
+        this.awsKmsProvider = new AwsKmsProvider(mapper);
         // Add default local store
         stores.put("local", new SecretStore("local", "Local Secret Store",
             SecretStoreType.LOCAL, Map.of(), true, Instant.now()));
@@ -52,6 +58,7 @@ public class DefaultVaultSecretManager implements VaultSecretManager {
             case LOCAL -> localSecretValues.put(storeId + ":" + path, value);
             case HASHICORP_VAULT -> putToVault(store, path, value);
             case AWS_SECRETS_MANAGER -> putToAwsSecretsManager(store, path, value);
+            case AWS_KMS -> putToAwsKms(store, path, value);
             default -> throw new UnsupportedOperationException("Write not supported for: " + store.type());
         }
     }
@@ -60,8 +67,11 @@ public class DefaultVaultSecretManager implements VaultSecretManager {
     public void deleteSecret(String storeId, String path) {
         SecretStore store = stores.get(storeId);
         if (store == null) return;
-        if (store.type() == SecretStoreType.LOCAL) {
-            localSecretValues.remove(storeId + ":" + path);
+        switch (store.type()) {
+            case LOCAL -> localSecretValues.remove(storeId + ":" + path);
+            case AWS_SECRETS_MANAGER -> deleteFromAwsSecretsManager(store, path);
+            case AWS_KMS -> localSecretValues.remove(storeId + ":" + path);
+            default -> { /* no-op for unsupported backends */ }
         }
     }
 
@@ -69,14 +79,17 @@ public class DefaultVaultSecretManager implements VaultSecretManager {
     public List<String> listSecrets(String storeId, String prefix) {
         SecretStore store = stores.get(storeId);
         if (store == null) return List.of();
-        if (store.type() == SecretStoreType.LOCAL) {
-            String keyPrefix = storeId + ":" + (prefix != null ? prefix : "");
-            return localSecretValues.keySet().stream()
-                .filter(k -> k.startsWith(keyPrefix))
-                .map(k -> k.substring(storeId.length() + 1))
-                .toList();
-        }
-        return List.of();
+        return switch (store.type()) {
+            case LOCAL, AWS_KMS -> {
+                String keyPrefix = storeId + ":" + (prefix != null ? prefix : "");
+                yield localSecretValues.keySet().stream()
+                    .filter(k -> k.startsWith(keyPrefix))
+                    .map(k -> k.substring(storeId.length() + 1))
+                    .toList();
+            }
+            case AWS_SECRETS_MANAGER -> awsSecretsManagerProvider.listSecrets(store, prefix);
+            default -> List.of();
+        };
     }
 
     @Override
@@ -179,19 +192,30 @@ public class DefaultVaultSecretManager implements VaultSecretManager {
     }
 
     private String getFromAwsSecretsManager(SecretStore store, String path) {
-        // AWS SDK integration - delegates to AWS Secrets Manager API
-        log.info("AWS Secrets Manager: reading {}", path);
-        throw new UnsupportedOperationException("AWS Secrets Manager requires AWS SDK configuration");
+        return awsSecretsManagerProvider.getSecret(store, path);
     }
 
     private void putToAwsSecretsManager(SecretStore store, String path, String value) {
-        log.info("AWS Secrets Manager: writing {}", path);
-        throw new UnsupportedOperationException("AWS Secrets Manager requires AWS SDK configuration");
+        awsSecretsManagerProvider.putSecret(store, path, value);
+    }
+
+    private void deleteFromAwsSecretsManager(SecretStore store, String path) {
+        awsSecretsManagerProvider.deleteSecret(store, path, false, 7);
     }
 
     private String getFromAwsKms(SecretStore store, String path) {
-        log.info("AWS KMS: decrypting {}", path);
-        throw new UnsupportedOperationException("AWS KMS requires AWS SDK configuration");
+        // KMS stores encrypted ciphertext — decrypt it
+        String ciphertext = localSecretValues.get(store.id() + ":" + path);
+        if (ciphertext == null) {
+            throw new IllegalArgumentException("No encrypted value found for path: " + path);
+        }
+        return awsKmsProvider.decrypt(store, ciphertext);
+    }
+
+    private void putToAwsKms(SecretStore store, String path, String value) {
+        // Encrypt with KMS and store the ciphertext
+        String ciphertext = awsKmsProvider.encrypt(store, null, value);
+        localSecretValues.put(store.id() + ":" + path, ciphertext);
     }
 
     private String getFromGcpSecretManager(SecretStore store, String path) {
@@ -202,5 +226,72 @@ public class DefaultVaultSecretManager implements VaultSecretManager {
     private String getFromAzureKeyVault(SecretStore store, String path) {
         log.info("Azure Key Vault: reading {}", path);
         throw new UnsupportedOperationException("Azure Key Vault requires Azure SDK configuration");
+    }
+
+    // ── AWS-Specific Operations ─────────────────────────────────────────
+
+    public AwsSecretsManagerProvider getAwsSecretsManagerProvider() {
+        return awsSecretsManagerProvider;
+    }
+
+    public AwsKmsProvider getAwsKmsProvider() {
+        return awsKmsProvider;
+    }
+
+    public Map<String, String> describeAwsSecret(String storeId, String path) {
+        SecretStore store = stores.get(storeId);
+        if (store == null || store.type() != SecretStoreType.AWS_SECRETS_MANAGER) {
+            throw new IllegalArgumentException("Not an AWS Secrets Manager store: " + storeId);
+        }
+        return awsSecretsManagerProvider.describeSecret(store, path);
+    }
+
+    public void configureAwsRotation(String storeId, String path,
+                                      String rotationLambdaArn, int rotationDays) {
+        SecretStore store = stores.get(storeId);
+        if (store == null || store.type() != SecretStoreType.AWS_SECRETS_MANAGER) {
+            throw new IllegalArgumentException("Not an AWS Secrets Manager store: " + storeId);
+        }
+        awsSecretsManagerProvider.configureRotation(store, path, rotationLambdaArn, rotationDays);
+    }
+
+    public String rotateAwsSecretNow(String storeId, String path) {
+        SecretStore store = stores.get(storeId);
+        if (store == null || store.type() != SecretStoreType.AWS_SECRETS_MANAGER) {
+            throw new IllegalArgumentException("Not an AWS Secrets Manager store: " + storeId);
+        }
+        return awsSecretsManagerProvider.rotateSecretNow(store, path);
+    }
+
+    public void tagAwsSecret(String storeId, String path, Map<String, String> tags) {
+        SecretStore store = stores.get(storeId);
+        if (store == null || store.type() != SecretStoreType.AWS_SECRETS_MANAGER) {
+            throw new IllegalArgumentException("Not an AWS Secrets Manager store: " + storeId);
+        }
+        awsSecretsManagerProvider.tagSecret(store, path, tags);
+    }
+
+    public void restoreAwsSecret(String storeId, String path) {
+        SecretStore store = stores.get(storeId);
+        if (store == null || store.type() != SecretStoreType.AWS_SECRETS_MANAGER) {
+            throw new IllegalArgumentException("Not an AWS Secrets Manager store: " + storeId);
+        }
+        awsSecretsManagerProvider.restoreSecret(store, path);
+    }
+
+    public Map<String, String> generateKmsDataKey(String storeId, String keyId) {
+        SecretStore store = stores.get(storeId);
+        if (store == null || store.type() != SecretStoreType.AWS_KMS) {
+            throw new IllegalArgumentException("Not an AWS KMS store: " + storeId);
+        }
+        return awsKmsProvider.generateDataKey(store, keyId);
+    }
+
+    public Map<String, String> describeKmsKey(String storeId, String keyId) {
+        SecretStore store = stores.get(storeId);
+        if (store == null || store.type() != SecretStoreType.AWS_KMS) {
+            throw new IllegalArgumentException("Not an AWS KMS store: " + storeId);
+        }
+        return awsKmsProvider.describeKey(store, keyId);
     }
 }

@@ -228,6 +228,7 @@
                 <artifactId>s3</artifactId>
                 <version>${aws-sdk.version}</version>
             </dependency>
+            <!-- AWS Secrets Manager and KMS use direct REST API calls -->
 
             <!-- Cron -->
             <dependency>

@@ -70,6 +70,10 @@
             <artifactId>s3</artifactId>
         </dependency>
 
+        <!-- Note: AWS Secrets Manager and KMS integration uses AWS REST API
+             directly via Java HttpClient with SigV4 signing, avoiding extra
+             SDK dependencies. The S3 SDK is already present for artifact storage. -->
+
         <!-- Cron -->
         <dependency>
             <groupId>com.cronutils</groupId>
