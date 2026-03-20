@@ -181,7 +181,7 @@ def test_concurrent_registration():
     # Clear users table
     subprocess.run(
         ["psql", "-h", "localhost", "-U", "gimi", "-d", "gimi", "-c", "DELETE FROM users;"],
-        capture_output=True, env={**os.environ, "PGPASSWORD": "gimi"}
+        capture_output=True, env={**os.environ, "PGPASSWORD": os.environ.get("PGPASSWORD", "gimi")}
     )
 
     def register_admin(i):
@@ -207,7 +207,7 @@ def test_concurrent_registration():
     # Exactly 1 user should be created
     user_count = subprocess.run(
         ["psql", "-h", "localhost", "-U", "gimi", "-d", "gimi", "-t", "-c", "SELECT COUNT(*) FROM users;"],
-        capture_output=True, text=True, env={**os.environ, "PGPASSWORD": "gimi"}
+        capture_output=True, text=True, env={**os.environ, "PGPASSWORD": os.environ.get("PGPASSWORD", "gimi")}
     ).stdout.strip()
     print(f"  Users in DB:     {user_count}")
 

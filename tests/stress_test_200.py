@@ -454,7 +454,7 @@ def scenario_pg_contention():
         ["psql", "-h", "localhost", "-U", "gimi", "-d", "gimi", "-t", "-c",
          "SELECT COUNT(*) FROM api_keys WHERE name LIKE 'stress-key-%';"],
         capture_output=True, text=True,
-        env={**os.environ, "PGPASSWORD": "gimi"}
+        env={**os.environ, "PGPASSWORD": os.environ.get("PGPASSWORD", "gimi")}
     ).stdout.strip()
     print(f"    Keys in DB:  {count}")
 

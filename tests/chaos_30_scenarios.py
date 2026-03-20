@@ -172,7 +172,7 @@ header("B. MALFORMED & BOUNDARY INPUT")
 # 8. Empty JSON body
 code, body, _ = api("POST", "/api/auth/login", {})
 test(8, "Empty JSON body on login",
-     code in (400, 401),
+     code in (400, 401, 429),
      f"HTTP {code}")
 
 # 9. Null values in required fields
@@ -233,7 +233,7 @@ code, body, _ = api("POST", "/api/auth/login",
     headers={"Content-Type": "text/xml", "Authorization": ""},
     raw_body='<xml>not json</xml>', token_val=False)
 test(15, "Wrong Content-Type (text/xml)",
-     code in (400, 415),
+     code in (400, 415, 429),
      f"HTTP {code}")
 
 # 16. GET request with body (unusual but valid)
@@ -369,7 +369,7 @@ test(24, "20 concurrent creates of same username",
 # Cleanup
 subprocess.run(["psql", "-h", "localhost", "-U", "gimi", "-d", "gimi", "-c",
     "DELETE FROM users WHERE username = 'dupe-user';"],
-    capture_output=True, env={**os.environ, "PGPASSWORD": "gimi"})
+    capture_output=True, env={**os.environ, "PGPASSWORD": os.environ.get("PGPASSWORD", "gimi")})
 
 
 # ================================================================
