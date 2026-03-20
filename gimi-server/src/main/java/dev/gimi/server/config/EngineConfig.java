@@ -3,12 +3,21 @@ package dev.gimi.server.config;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import dev.gimi.engine.GimiEngine;
+import dev.gimi.engine.analytics.DoraMetricsService;
+import dev.gimi.engine.chaos.ChaosEngineService;
+import dev.gimi.engine.cost.CloudCostService;
+import dev.gimi.engine.ff.FeatureFlagService;
+import dev.gimi.engine.gitops.GitOpsService;
 import dev.gimi.engine.history.ExecutionStore;
 import dev.gimi.engine.history.PostgresExecutionStore;
 import dev.gimi.engine.log.LogStreamer;
 import dev.gimi.engine.log.RedisLogStreamer;
 import dev.gimi.engine.queue.JobQueue;
 import dev.gimi.engine.queue.RedisJobQueue;
+import dev.gimi.engine.security.SecurityScanService;
+import dev.gimi.engine.slo.SloService;
+import dev.gimi.engine.ti.TestIntelligenceService;
+import dev.gimi.engine.verification.ContinuousVerificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -121,5 +130,52 @@ public class EngineConfig {
     @Bean
     public GimiEngine gimiEngine(ExecutionStore executionStore) {
         return new GimiEngine(executionStore);
+    }
+
+    // === Harness-beating feature services ===
+
+    @Bean
+    public TestIntelligenceService testIntelligenceService() {
+        return new TestIntelligenceService();
+    }
+
+    @Bean
+    public ContinuousVerificationService continuousVerificationService() {
+        return new ContinuousVerificationService();
+    }
+
+    @Bean
+    public DoraMetricsService doraMetricsService(ExecutionStore executionStore) {
+        return new DoraMetricsService(executionStore);
+    }
+
+    @Bean
+    public FeatureFlagService featureFlagService() {
+        return new FeatureFlagService();
+    }
+
+    @Bean
+    public SecurityScanService securityScanService() {
+        return new SecurityScanService();
+    }
+
+    @Bean
+    public SloService sloService() {
+        return new SloService();
+    }
+
+    @Bean
+    public GitOpsService gitOpsService() {
+        return new GitOpsService();
+    }
+
+    @Bean
+    public ChaosEngineService chaosEngineService() {
+        return new ChaosEngineService();
+    }
+
+    @Bean
+    public CloudCostService cloudCostService() {
+        return new CloudCostService();
     }
 }
