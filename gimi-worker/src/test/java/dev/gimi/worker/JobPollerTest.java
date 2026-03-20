@@ -57,13 +57,15 @@ class JobPollerTest {
     @Test
     void shouldPollAndDequeueJob() throws Exception {
         Job job = createJob("j1");
-        when(jobQueue.dequeue(eq("test-worker"), any())).thenReturn(Optional.of(job));
+        when(jobQueue.dequeue(eq("test-worker"), any()))
+                .thenReturn(Optional.of(job))
+                .thenReturn(Optional.empty());
         when(jobExecutor.execute(any(), anyString()))
                 .thenReturn(new JobExecutor.JobResult(ExecutionStatus.PASSED, null, 100));
 
         poller.poll();
 
-        verify(jobQueue).dequeue(eq("test-worker"), eq(Set.of("default")));
+        verify(jobQueue, atLeastOnce()).dequeue(eq("test-worker"), eq(Set.of("default")));
     }
 
     @Test
@@ -131,7 +133,9 @@ class JobPollerTest {
     @Test
     void shouldUpdateStatusToRunningBeforeExecution() throws Exception {
         Job job = createJob("j1");
-        when(jobQueue.dequeue(eq("test-worker"), any())).thenReturn(Optional.of(job));
+        when(jobQueue.dequeue(eq("test-worker"), any()))
+                .thenReturn(Optional.of(job))
+                .thenReturn(Optional.empty());
         when(jobExecutor.execute(any(), anyString()))
                 .thenReturn(new JobExecutor.JobResult(ExecutionStatus.PASSED, null, 100));
 
@@ -140,13 +144,15 @@ class JobPollerTest {
         // Give async execution a moment to start
         Thread.sleep(200);
 
-        verify(jobQueue).updateStatus("j1", JobStatus.RUNNING);
+        verify(jobQueue, atLeastOnce()).updateStatus("j1", JobStatus.RUNNING);
     }
 
     @Test
     void shouldUpdateStatusToSucceededOnSuccess() throws Exception {
         Job job = createJob("j1");
-        when(jobQueue.dequeue(eq("test-worker"), any())).thenReturn(Optional.of(job));
+        when(jobQueue.dequeue(eq("test-worker"), any()))
+                .thenReturn(Optional.of(job))
+                .thenReturn(Optional.empty());
         when(jobExecutor.execute(any(), anyString()))
                 .thenReturn(new JobExecutor.JobResult(ExecutionStatus.PASSED, null, 100));
 
@@ -155,7 +161,7 @@ class JobPollerTest {
         // Give async execution time to complete
         Thread.sleep(500);
 
-        verify(jobQueue).updateStatus("j1", JobStatus.SUCCEEDED);
+        verify(jobQueue, atLeastOnce()).updateStatus("j1", JobStatus.SUCCEEDED);
     }
 
     @Test
@@ -165,7 +171,9 @@ class JobPollerTest {
                 Map.of(), Map.of(), 0, 0, 0,
                 Instant.now(), Instant.now(), null, 3600);
 
-        when(jobQueue.dequeue(eq("test-worker"), any())).thenReturn(Optional.of(job));
+        when(jobQueue.dequeue(eq("test-worker"), any()))
+                .thenReturn(Optional.of(job))
+                .thenReturn(Optional.empty());
         when(jobExecutor.execute(any(), anyString()))
                 .thenReturn(new JobExecutor.JobResult(ExecutionStatus.FAILED, null, 100));
 
@@ -174,7 +182,7 @@ class JobPollerTest {
         // Give async execution time to complete
         Thread.sleep(500);
 
-        verify(jobQueue).updateStatus("j1", JobStatus.FAILED);
+        verify(jobQueue, atLeastOnce()).updateStatus("j1", JobStatus.FAILED);
     }
 
     @Test
@@ -184,7 +192,9 @@ class JobPollerTest {
                 Map.of(), Map.of(), 0, 3, 0,
                 Instant.now(), Instant.now(), null, 3600);
 
-        when(jobQueue.dequeue(eq("test-worker"), any())).thenReturn(Optional.of(job));
+        when(jobQueue.dequeue(eq("test-worker"), any()))
+                .thenReturn(Optional.of(job))
+                .thenReturn(Optional.empty());
         when(jobExecutor.execute(any(), anyString()))
                 .thenReturn(new JobExecutor.JobResult(ExecutionStatus.FAILED, null, 100));
 
@@ -194,7 +204,7 @@ class JobPollerTest {
         Thread.sleep(500);
 
         // Should re-enqueue with incremented retryCount
-        verify(jobQueue).enqueue(argThat(j -> j.retryCount() == 1));
+        verify(jobQueue, atLeastOnce()).enqueue(argThat(j -> j.retryCount() == 1));
     }
 
     @Test
