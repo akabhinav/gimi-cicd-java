@@ -243,7 +243,7 @@ export function adaptFeatureFlags(data: unknown): FeatureFlag[] {
     }
 
     return {
-      id: (item.id as string) || '',
+      id: (item.id as string) || (item.key as string) || '',
       name: (item.name as string) || '',
       key: (item.key as string) || '',
       enabled: item.enabled !== false,
