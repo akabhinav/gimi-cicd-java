@@ -118,7 +118,7 @@ public class SecurityConfig {
         if (corsAllowedOrigins != null && !corsAllowedOrigins.isBlank()) {
             origins = Arrays.asList(corsAllowedOrigins.split(","));
         } else {
-            origins = List.of("http://localhost:3000", "http://localhost:5173");
+            origins = List.of("http://localhost:3000", "http://localhost:3001", "http://localhost:5173");
         }
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
