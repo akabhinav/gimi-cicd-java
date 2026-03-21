@@ -63,6 +63,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/prometheus").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers("/webhook").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Swagger / OpenAPI
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Worker endpoints require worker token (validated by WorkerAuthFilter)
                         .requestMatchers(HttpMethod.POST, "/api/workers/register").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/workers/*/heartbeat").permitAll()
