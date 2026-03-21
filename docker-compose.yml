@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: gimi
       POSTGRES_PASSWORD: ${GIMI_POSTGRES_PASSWORD:-gimi}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./gimi-engine/src/main/resources/db/migration/V1__init.sql:/docker-entrypoint-initdb.d/01-schema.sql
@@ -22,7 +22,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
