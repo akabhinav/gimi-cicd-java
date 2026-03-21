@@ -34,7 +34,7 @@ services:
       dockerfile: Dockerfile
       target: server
     ports:
-      - "8085:8080"
+      - "8085:8085"
     environment:
       SPRING_PROFILES_ACTIVE: dev
       GIMI_SERVER_DISTRIBUTED_MODE: "true"
@@ -61,7 +61,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -74,7 +74,7 @@ services:
       target: worker
     environment:
       GIMI_WORKER_REDIS_URL: redis://redis:6379
-      GIMI_WORKER_SERVER_URL: http://gimi-server:8080
+      GIMI_WORKER_SERVER_URL: http://gimi-server:8085
       GIMI_WORKER_MAX_CONCURRENT_JOBS: "200"
     deploy:
       resources:

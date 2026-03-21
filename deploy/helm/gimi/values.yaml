@@ -22,7 +22,7 @@ server:
       cpu: "2"
       memory: 2Gi
   javaOpts: "-XX:+UseZGC -XX:MaxRAMPercentage=75.0"
-  port: 8080
+  port: 8085
   nodeSelector: {}
   tolerations: []
   affinity: {}

@@ -39,7 +39,7 @@ public class WorkerConfig {
     private long pollIntervalMs = 500;
     private long heartbeatIntervalMs = 3000;
     private String redisUrl = "redis://localhost:6379";
-    private String serverUrl = "http://localhost:8080";
+    private String serverUrl = "http://localhost:8085";
     private String workerToken = "";
 
     /**

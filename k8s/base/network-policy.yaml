@@ -17,7 +17,7 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: ingress-nginx
       ports:
-        - port: 8080
+        - port: 8085
           protocol: TCP
     # Allow traffic from workers (health reporting)
     - from:
@@ -25,7 +25,7 @@ spec:
             matchLabels:
               app.kubernetes.io/name: gimi-worker
       ports:
-        - port: 8080
+        - port: 8085
           protocol: TCP
   egress:
     # PostgreSQL
@@ -79,7 +79,7 @@ spec:
             matchLabels:
               app.kubernetes.io/name: gimi-server
       ports:
-        - port: 8080
+        - port: 8085
           protocol: TCP
     # DNS
     - to:

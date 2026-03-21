@@ -10,7 +10,7 @@ gimi:
     poll-interval-ms: 500
     heartbeat-interval-ms: 3000
     redis-url: redis://localhost:6379
-    server-url: http://localhost:8080
+    server-url: http://localhost:8085
     worker-token: ""  # Set via GIMI_WORKER_WORKER_TOKEN env var. Derive from server JWT secret.
     labels:
       - default

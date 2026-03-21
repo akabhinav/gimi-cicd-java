@@ -102,7 +102,7 @@ deploy_local() {
 
     log "Waiting for services to be healthy..."
     for i in $(seq 1 30); do
-        if curl -sf http://localhost:8080/actuator/health &>/dev/null; then
+        if curl -sf http://localhost:8085/actuator/health &>/dev/null; then
             break
         fi
         sleep 2
@@ -112,8 +112,8 @@ deploy_local() {
     log "GIMI CI/CD is running!"
     echo ""
     echo "  UI:     http://localhost:3000"
-    echo "  API:    http://localhost:8080"
-    echo "  Health: http://localhost:8080/actuator/health"
+    echo "  API:    http://localhost:8085"
+    echo "  Health: http://localhost:8085/actuator/health"
     echo ""
     echo "  Admin password: $ADMIN_PASSWORD"
     echo ""
@@ -188,7 +188,7 @@ deploy_kubernetes() {
     echo "  Namespace: $NAMESPACE"
     echo "  Context:   $context"
     echo ""
-    echo "  Port-forward: kubectl port-forward svc/gimi-server 8080:8080 -n $NAMESPACE"
+    echo "  Port-forward: kubectl port-forward svc/gimi-server 8085:8085 -n $NAMESPACE"
     echo "  Logs:         kubectl logs -f deploy/gimi-server -n $NAMESPACE"
     echo "  Scale:        kubectl scale deploy/gimi-worker --replicas=10 -n $NAMESPACE"
 }

@@ -3,7 +3,7 @@
 # Tests all 23 backend controllers against a running server
 
 set -e
-BASE="http://localhost:8080"
+BASE="http://localhost:8085"
 PASS=0
 FAIL=0
 TOTAL=0

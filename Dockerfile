@@ -27,7 +27,7 @@ WORKDIR /app
 COPY --from=build /build/gimi-server/target/*.jar app.jar
 COPY pipelines/ pipelines/
 USER gimi
-EXPOSE 8080
+EXPOSE 8085
 ENV JAVA_OPTS="-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport -Djava.security.egd=file:/dev/./urandom"
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 

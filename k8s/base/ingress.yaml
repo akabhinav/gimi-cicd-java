@@ -36,4 +36,4 @@ spec:
               service:
                 name: gimi-server
                 port:
-                  number: 8080
+                  number: 8085
