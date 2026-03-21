@@ -12,7 +12,7 @@ gimi:
   server:
     pipeline-dir: ./pipelines
     webhook-secret: ""
-    jwt-secret: change-me-in-production-min-32-chars!!
+    jwt-secret: gimi-dev-secret-key-change-in-prod-at-least-32-bytes
     default-admin-password: admin
     distributed-mode: false
     redis-url: redis://localhost:6379

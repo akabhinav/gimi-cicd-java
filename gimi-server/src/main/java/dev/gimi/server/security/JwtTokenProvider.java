@@ -27,7 +27,7 @@ public class JwtTokenProvider {
 
     private final SecretKey key;
 
-    public JwtTokenProvider(@Value("${gimi.server.jwt-secret:change-me-in-production-min-32-chars!!}") String secret) {
+    public JwtTokenProvider(@Value("${gimi.server.jwt-secret:gimi-dev-secret-key-change-in-prod-at-least-32-bytes}") String secret) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
