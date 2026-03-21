@@ -36,7 +36,7 @@ services:
       dockerfile: Dockerfile
       target: server
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
       SPRING_PROFILES_ACTIVE: dev
       GIMI_SERVER_DISTRIBUTED_MODE: "true"
@@ -98,7 +98,7 @@ services:
       context: ./gimi-ui
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "3001:80"
     depends_on:
       gimi-server:
         condition: service_healthy
