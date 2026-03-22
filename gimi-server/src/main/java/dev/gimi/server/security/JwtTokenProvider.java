@@ -10,10 +10,16 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.stream.Collectors;
 
@@ -23,12 +29,24 @@ import java.util.stream.Collectors;
 @Component
 public class JwtTokenProvider {
 
+    private static final Logger LOG = LoggerFactory.getLogger(JwtTokenProvider.class);
     private static final Duration TOKEN_EXPIRY = Duration.ofHours(24);
+    private static final int MIN_KEY_BYTES = 32; // 256 bits for HS256
 
     private final SecretKey key;
 
     public JwtTokenProvider(@Value("${gimi.server.jwt-secret:gimi-dev-secret-key-change-in-production-at-least-32-bytes!}") String secret) {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < MIN_KEY_BYTES) {
+            LOG.warn("JWT secret is only {} bits ({} bytes); hashing to derive a 256-bit key. "
+                    + "Set a secret with at least 32 bytes for production.", secretBytes.length * 8, secretBytes.length);
+            try {
+                secretBytes = MessageDigest.getInstance("SHA-256").digest(secretBytes);
+            } catch (NoSuchAlgorithmException e) {
+                secretBytes = Arrays.copyOf(secretBytes, MIN_KEY_BYTES);
+            }
+        }
+        this.key = Keys.hmacShaKeyFor(secretBytes);
     }
 
     /**
