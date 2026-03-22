@@ -43,7 +43,7 @@ services:
       GIMI_SERVER_POSTGRES_PASSWORD: ${GIMI_POSTGRES_PASSWORD:-gimi}
       GIMI_SERVER_REDIS_URL: redis://redis:6379
       GIMI_SERVER_PIPELINE_DIR: /app/pipelines
-      GIMI_SERVER_JWT_SECRET: "${GIMI_JWT_SECRET:-gimi-dev-secret-key-change-in-prod-at-least-32-bytes}"
+      GIMI_SERVER_JWT_SECRET: "${GIMI_JWT_SECRET:-gimi-dev-secret-key-change-in-production-at-least-32-bytes!}"
       GIMI_SERVER_WEBHOOK_SECRET: ${GIMI_WEBHOOK_SECRET:-}
     deploy:
       resources:
