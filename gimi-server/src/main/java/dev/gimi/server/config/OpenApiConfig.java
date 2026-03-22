@@ -3,8 +3,7 @@ package dev.gimi.server.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.springframework.aop.support.AopUtils;
-import org.springframework.context.ApplicationContext;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,7 +25,7 @@ public class OpenApiConfig {
     private final RequestMappingHandlerMapping handlerMapping;
     private final ObjectMapper mapper;
 
-    public OpenApiConfig(RequestMappingHandlerMapping handlerMapping, ObjectMapper mapper) {
+    public OpenApiConfig(@Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping, ObjectMapper mapper) {
         this.handlerMapping = handlerMapping;
         this.mapper = mapper;
     }
